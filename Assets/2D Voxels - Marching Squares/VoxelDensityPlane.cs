@@ -98,10 +98,14 @@ public class VoxelDensityPlane : MonoBehaviour
         {
             new VoxelDirectionValuePair2D(0,0,1),
             new VoxelDirectionValuePair2D(-1,0,1),
+            new VoxelDirectionValuePair2D(-2,0,1),
+            new VoxelDirectionValuePair2D(-3,0,1),
             new VoxelDirectionValuePair2D(-1,1,1),
             new VoxelDirectionValuePair2D(0,1,1),
             new VoxelDirectionValuePair2D(1,1,1),
             new VoxelDirectionValuePair2D(1,0,1),
+            new VoxelDirectionValuePair2D(2,0,1),
+            new VoxelDirectionValuePair2D(3,0,1),
             new VoxelDirectionValuePair2D(1,-1,1),
             new VoxelDirectionValuePair2D(0,-1,1),
             new VoxelDirectionValuePair2D(-1,-1,1)
@@ -114,11 +118,7 @@ public class VoxelDensityPlane : MonoBehaviour
 
     private void Update()
     {
-        if (activeEditRoutine == null)
-        {
-            activeEditRoutine = EditChunks();
-            StartCoroutine(activeEditRoutine);
-        }
+        EditChunks();
     }
 
     private void OnDrawGizmos()
@@ -168,7 +168,7 @@ public class VoxelDensityPlane : MonoBehaviour
         }
     }
 
-    private IEnumerator EditChunks()
+    private void EditChunks()
     {
         if (Input.GetKeyDown(KeyCode.Mouse0))
         {
@@ -199,160 +199,88 @@ public class VoxelDensityPlane : MonoBehaviour
                 // Modify voxels based on active brush
                 for (int i = 0; i < activeBrush.ValueDirectionPairs.Length; i++)
                 {
-                    // Iterate one cycle, only after space is pressed
-                    yield return new WaitForSeconds(debug_stepTime);
-
-                    var valueDir = activeBrush.ValueDirectionPairs[i];
-
                     // Establish where the voxel is in its chunk
-                    int y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int x);
+                    int voxel_y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int voxel_x);
+                    int chunk_editI = closestChunkIndex;
 
-                    //Debug.Log("Original: " + x + " " + y);
-
-                    // Find position of voxel to edit
-                    int editChunkI = closestChunkIndex;
-                    int editXI = x + valueDir.XDir;
-                    int editYI = y + valueDir.YDir;
-
-                    // Ensure edit voxel is in row:
-
-                    // Define row boundaries in each chunk
-                    int rowMin = editYI * (Resolution + 1);
-                    int rowMax = rowMin + Resolution;
-
-                    /*
-                    Debug.Log(
-                        " x: " + editXI +
-                        " y: " + editYI +
-                        " min: " + rowMin + 
-                        " max: " + rowMax
-                        );
-                        */
-
-                    // If outside boundaries:
-                    var xIsOutOfBounds = editXI < 0 || Resolution < editXI;
-                    var yIsOutOfBounds = editYI < 0 || Resolution < editYI;
-                    if (xIsOutOfBounds || yIsOutOfBounds)
+                    //Get this chunk's x and y indicies
+                    int chunk_x = 0;
+                    int chunk_y = 0;
+                    for (int chunk_i = 0; chunk_i < (ChunkCountX) * ChunkCountY; chunk_i++)
                     {
-                        //Debug.Log("x is Out of row");
+                        if (chunk_i == chunk_editI) break;
+                        chunk_x++;
 
-                        // Find appropriate chunk along x
-                        // break dist from row end down to chunks + indv voxels. indv voxels must be no greater than res+1. chunks away starts at 1
-                        int chunkOffsetX = 0;
+                        if (chunk_x == ChunkCountX)
                         {
-                            var divnd = editXI;
-                            var divsr = Resolution + 1;
-                            chunkOffsetX = System.Math.DivRem(divnd, divsr, out int posInNewChunk);
-                            chunkOffsetX += (int)Mathf.Sign(editXI) * 1;
-                            if (chunkOffsetX > 0) chunkOffsetX--;
-                        }
-
-                        int chunkOffsetY = 0;
-                        {
-                            var divnd = editYI;
-                            var divsr = Resolution + 1;
-                            chunkOffsetY = System.Math.DivRem(divnd, divsr, out int posInNewChunk);
-                            chunkOffsetY += (int)Mathf.Sign(editYI) * 1;
-                            if (chunkOffsetY > 0) chunkOffsetY--;
-                        }
-
-                        //Debug.Log(q);
-
-                        // Locate current chunk's x and y
-                        var cx = 0;
-                        var cy = 0;
-                        for (int ci = 0; ci < (ChunkCountX) * ChunkCountY; ci++)
-                        {
-                            if (ci == editChunkI) break;
-
-                            cx++;
-
-                            if (cx == ChunkCountX)
-                            {
-                                cy++;
-                                cx = 0;
-                            }
-                        }
-
-                        // Apply changes to editCI if chunk can be found
-                        int cRowMin = cy * ChunkCountY;
-                        int cRowMax = cRowMin + ChunkCountY - 1;
-                        int editCX = cx + chunkOffsetX;
-                        int editCY = cy + chunkOffsetY;
-                        
-                        Debug.Log(
-                            " cx: " + cx +
-                            " cy: " + cy +
-                            " cmin: " + cRowMin +
-                            " cmax: " + cRowMax +
-                            " ceditx: " + editCX +
-                            " cedity: " + editCY
-                            );
-                        
-                        // limit / load x in neighbour chunk
-                        if (editCX < 0 || ChunkCountX <= editCX)
-                        {
-                            Debug.Log(editCX + "x is out of bounds");
-                            // stop edit if point is out of bounds
-                            continue;
-                        }
-                        else
-                        {
-                            editChunkI += chunkOffsetX;
-
-                            Debug.Log("edX (1) " + editXI);
-
-                            if (editXI < 0)
-                            {
-                                editXI += Mathf.Abs(chunkOffsetX) * (Resolution + 1);
-                            }
-                            else
-                            {
-                                editXI -= Mathf.Abs(chunkOffsetX) * (Resolution + 1);
-                            }
-
-                            Debug.Log("edX (2) " + editXI);
-                        }
-
-                        // limit / load y in neighbour chunk
-                        if (editCY < 0 || ChunkCountY <= editCY)
-                        {
-                            Debug.Log(editYI + "y is out of bounds");
-                            // stop edit if point is out of bounds
-                            continue;
-                        }
-                        else
-                        {
-                            editChunkI += chunkOffsetY * ChunkCountX;
-
-                            Debug.Log("edY (1) " + editYI);
-
-                            
-                            if (editYI < 0)
-                            {
-                                editYI += Mathf.Abs(chunkOffsetY) * (Resolution + 1);
-                            }
-                            else
-                            {
-                                editYI -= Mathf.Abs(chunkOffsetY) * (Resolution + 1);
-                            }
-
-                            Debug.Log("edY (2) " + editYI);
+                            chunk_y++;
+                            chunk_x = 0;
                         }
                     }
-                    voxelChunks[editChunkI].Voxels[editXI + (editYI * (Resolution + 1))].Value = valueDir.Value;
-                }
+
+                    // Try edit the voxel
+                    bool abort = false;
+
+                    TryEditVoxelOnAxis(
+                        voxel_y, chunk_y,
+                        activeBrush.ValueDirectionPairs[i].YDir, 
+                        dimensionOffset: ChunkCountX,
+                        ref chunk_editI,
+                        out int editYI,
+                        ref abort
+                        );
+                    TryEditVoxelOnAxis(
+                        voxel_x, chunk_x,
+                        activeBrush.ValueDirectionPairs[i].XDir,
+                        dimensionOffset: 1, 
+                        ref chunk_editI, 
+                        out int editXI, 
+                        ref abort);
+                    
+                    if (!abort)
+                        voxelChunks[chunk_editI]
+                            .Voxels[editXI + (editYI * (Resolution + 1))]
+                                .Value = activeBrush.ValueDirectionPairs[i].Value;
+               }
             }
         }
 
         // end the routine & allow it to operate after
         activeEditRoutine = null;
-        yield return null;
-
     }
+    private void TryEditVoxelOnAxis(int voxel_N, int chunk_N, int nDirOffset, int dimensionOffset, ref int chunk_editI, out int voxel_editN, ref bool abort)
+    {
+        voxel_editN = voxel_N + nDirOffset;
 
-    private bool SpaceWasPressed() => Input.GetKeyDown(KeyCode.Space);
+        var nIsOutOfBounds = voxel_editN < 0 || Resolution < voxel_editN;
+        if (nIsOutOfBounds)
+        {
+            // Get offset pos of chunk along n axis
+            var chunkoffsetN =
+                System.Math.DivRem(
+                    voxel_editN,
+                    Resolution + 1,
+                    out int posInNewChunk
+                    );
+            chunkoffsetN += (int)Mathf.Sign(voxel_editN) * 1;
+            if (chunkoffsetN > 0) chunkoffsetN--;
 
+            // Try modify n in other chunk. Prevent edit if chunk does not exist
+            int editCN = chunk_N + chunkoffsetN;
+            if (editCN < 0 || ChunkCountY <= editCN) { abort = true; return; }
+            else
+            {
+                // Dimension offset is used for converting additional dimensions back into the singular dimension of the chunk array.
+                // 1st dim uses 1
+                // 2nd dim uses length of 1st
+                chunk_editI += chunkoffsetN * dimensionOffset;
+
+                if (voxel_editN < 0) voxel_editN += Mathf.Abs(chunkoffsetN) * (Resolution + 1);
+                else voxel_editN -= Mathf.Abs(chunkoffsetN) * (Resolution + 1);
+            }
+        }
+    }
+    
     private Voxel2D[] GenerateVoxelChunk(float size, int resolution, Vector2 offset)
     {
         int cells = resolution * resolution;
@@ -378,7 +306,7 @@ public class VoxelDensityPlane : MonoBehaviour
         return voxelPlane;                
     }
 
-    private const float gizmoSize = 0.1f;
+    private const float gizmoSize = 0.3f;
     private void DrawGizmosForVoxels(Voxel2D[] voxels)
     {
         foreach (Voxel2D voxel in voxels)
