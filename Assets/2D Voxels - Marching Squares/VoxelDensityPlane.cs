@@ -43,9 +43,6 @@ namespace SCARLET.VoxelDensity
 
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
-
-        private VoxelBrush2D primaryBrush = new VoxelBrush2D();
-        private VoxelBrush2D secondaryBrush = new VoxelBrush2D();
         #endregion
 
         #region Unity Messages
@@ -56,53 +53,12 @@ namespace SCARLET.VoxelDensity
             meshFilter = GetComponent<MeshFilter>();
             meshRenderer = GetComponent<MeshRenderer>();
 
-            // Define Default brush
-            primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
-            {
-                new VoxelDirectionValuePair2D(0,0,1)/*,
-                new VoxelDirectionValuePair2D(-1,0,1),
-                new VoxelDirectionValuePair2D(0,1,1),
-                new VoxelDirectionValuePair2D(1,0,1),
-                new VoxelDirectionValuePair2D(0,-1,1)*/
-            };
-            secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
-            {
-                new VoxelDirectionValuePair2D(0,0,0)/*,
-                new VoxelDirectionValuePair2D(-1,0,0),
-                new VoxelDirectionValuePair2D(0,1,0),
-                new VoxelDirectionValuePair2D(1,0,0),
-                new VoxelDirectionValuePair2D(0,-1,0)*/
-            };
-
-
-
             // Generate chunks
             InitChunks();
-
         }
 
         private void Update()
         {
-            bool reTriangulate = false;
-            if (Input.GetKey(KeyCode.Mouse0))
-            {
-                EditChunkDataWithBrush(primaryBrush, voxelChunks);
-                reTriangulate = true;
-            }
-            else if (Input.GetKey(KeyCode.Mouse1))
-            {
-                EditChunkDataWithBrush(secondaryBrush, voxelChunks);
-                reTriangulate = true;
-            }
-
-            if (reTriangulate)
-            {
-                TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
-                for (int i = 0; i < voxelChunks.Length; i++)
-                {
-                    voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
-                }
-            }
         }
 
         private void OnDrawGizmos()
@@ -128,7 +84,10 @@ namespace SCARLET.VoxelDensity
 
         private void InitChunks()
         {
+            Material defaultMaterial = Resources.Load<Material>("VoxelDensity_Default");
+
             voxelChunks = new VoxelChunk2D[ChunkCountX * ChunkCountY];
+
             float chunkPosY = -(ChunkSize * ChunkCountY) / 2;
             for (int y = 0, i = 0; y < ChunkCountY; y++)
             {
@@ -154,6 +113,7 @@ namespace SCARLET.VoxelDensity
                     // Create mesh components
                     chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
                     chunk.MeshRenderer = chunkGameObj.AddComponent<MeshRenderer>();
+                    chunk.MeshRenderer.sharedMaterial = defaultMaterial;
 
                     // Incriemnt
                     voxelChunks[i] = chunk;
@@ -191,77 +151,81 @@ namespace SCARLET.VoxelDensity
             return voxelPlane;
         }
 
-        private void EditChunkDataWithBrush(VoxelBrush2D brush, VoxelChunk2D[] voxelChunks)
+        public void ApplyVoxelBrush(Vector3 point, VoxelBrush2D brush)
         {
-            // Allow editing of voxel values
-            var hit = new RaycastHit();
-            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out hit))
+            EditChunkDataAtPoint(point, brush, voxelChunks);
+
+            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+            for (int i = 0; i < voxelChunks.Length; i++)
             {
-                // Find closest voxel to hit point
-                var closestChunkIndex = 0;
-                var closestVoxelIndex = 0;
-                var closestVoxel = voxelChunks[0].Voxels[0];
-                for (int ci = 0; ci < voxelChunks.Length; ci++)
+                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+            }
+        }
+        private void EditChunkDataAtPoint(Vector3 point, VoxelBrush2D brush, VoxelChunk2D[] voxelChunks)
+        {
+            // Find closest voxel to hit point
+            var closestChunkIndex = 0;
+            var closestVoxelIndex = 0;
+            var closestVoxel = voxelChunks[0].Voxels[0];
+            for (int ci = 0; ci < voxelChunks.Length; ci++)
+            {
+                for (int vi = 0; vi < voxelChunks[ci].Voxels.Length; vi++)
                 {
-                    for (int vi = 0; vi < voxelChunks[ci].Voxels.Length; vi++)
+                    var inspectedVoxel = voxelChunks[ci].Voxels[vi];
+                    if (Vector3.Distance(inspectedVoxel.Position + voxelChunks[ci].Position, point) <
+                        Vector3.Distance(closestVoxel.Position + voxelChunks[closestChunkIndex].Position, point))
                     {
-                        var inspectedVoxel = voxelChunks[ci].Voxels[vi];
-                        if (Vector3.Distance(inspectedVoxel.Position + voxelChunks[ci].Position, hit.point) <
-                            Vector3.Distance(closestVoxel.Position + voxelChunks[closestChunkIndex].Position, hit.point))
-                        {
-                            closestVoxel = inspectedVoxel;
-                            closestVoxelIndex = vi;
-                            closestChunkIndex = ci;
-                        }
+                        closestVoxel = inspectedVoxel;
+                        closestVoxelIndex = vi;
+                        closestChunkIndex = ci;
                     }
                 }
-                // Establish where the voxel is in its chunk
-                int voxel_y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int voxel_x);
+            }
+            // Establish where the voxel is in its chunk
+            int voxel_y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int voxel_x);
 
-                // Modify voxels based on active brush
-                for (int i = 0; i < brush.ValueDirectionPairs.Length; i++)
+            // Modify voxels based on active brush
+            for (int i = 0; i < brush.ValueDirectionPairs.Length; i++)
+            {
+                //Get this chunk's x and y indicies
+                int chunk_editI = closestChunkIndex;
+                int chunk_x = 0;
+                int chunk_y = 0;
+                for (int chunk_i = 0; chunk_i < (ChunkCountX) * ChunkCountY; chunk_i++)
                 {
-                    //Get this chunk's x and y indicies
-                    int chunk_editI = closestChunkIndex;
-                    int chunk_x = 0;
-                    int chunk_y = 0;
-                    for (int chunk_i = 0; chunk_i < (ChunkCountX) * ChunkCountY; chunk_i++)
+                    if (chunk_i == chunk_editI) break;
+                    chunk_x++;
+
+                    if (chunk_x == ChunkCountX)
                     {
-                        if (chunk_i == chunk_editI) break;
-                        chunk_x++;
-
-                        if (chunk_x == ChunkCountX)
-                        {
-                            chunk_y++;
-                            chunk_x = 0;
-                        }
+                        chunk_y++;
+                        chunk_x = 0;
                     }
-
-                    // Try edit the voxel
-                    bool abort = false;
-
-                    TryEditVoxelOnAxis(
-                        voxel_y, chunk_y,
-                        brush.ValueDirectionPairs[i].YDir,
-                        dimensionOffset: ChunkCountX,
-                        ref chunk_editI,
-                        out int editYI,
-                        ref abort
-                        );
-                    TryEditVoxelOnAxis(
-                        voxel_x, chunk_x,
-                        brush.ValueDirectionPairs[i].XDir,
-                        dimensionOffset: 1,
-                        ref chunk_editI,
-                        out int editXI,
-                        ref abort);
-
-                    if (!abort)
-                        voxelChunks[chunk_editI]
-                            .Voxels[editXI + (editYI * (Resolution + 1))]
-                                .Value = brush.ValueDirectionPairs[i].Value;
                 }
+
+                // Try edit the voxel
+                bool abort = false;
+
+                TryEditVoxelOnAxis(
+                    voxel_y, chunk_y,
+                    brush.ValueDirectionPairs[i].YDir,
+                    dimensionOffset: ChunkCountX,
+                    ref chunk_editI,
+                    out int editYI,
+                    ref abort
+                    );
+                TryEditVoxelOnAxis(
+                    voxel_x, chunk_x,
+                    brush.ValueDirectionPairs[i].XDir,
+                    dimensionOffset: 1,
+                    ref chunk_editI,
+                    out int editXI,
+                    ref abort);
+
+                if (!abort)
+                    voxelChunks[chunk_editI]
+                        .Voxels[editXI + (editYI * (Resolution + 1))]
+                            .Value = brush.ValueDirectionPairs[i].Value;
             }
         }
         private void TryEditVoxelOnAxis(int voxel_N, int chunk_N, int nDirOffset, int dimensionOffset, ref int chunk_editI, out int voxel_editN, ref bool abort)
@@ -296,10 +260,14 @@ namespace SCARLET.VoxelDensity
                 }
             }
         }
-                
+
         private void TriangulateData(VoxelChunk2D[] voxelChunks, out MeshData[] meshDataChunks)
         {
             meshDataChunks = new MeshData[voxelChunks.Length];
+
+            Vector2 offset_yNeighbour = new Vector2(0, ChunkSize);
+            Vector2 offset_xNeighbour = new Vector2(ChunkSize, 0);
+            Vector2 offset_xyNeighbour = new Vector2(ChunkSize, ChunkSize);
 
             // For each chunk
             for (int i = 0; i < voxelChunks.Length; i++)
@@ -326,46 +294,51 @@ namespace SCARLET.VoxelDensity
                         TriangulateCell(voxels, ref meshData, ref vertex_i);
                     }
 
-                    // Triangulate gap cell (if possible)
-                    
+                    // Triangulate gap cell (if possible)                    
                     if (voxelChunks[i].XNeighbour != null)
                     {
-                        var ia = (Resolution) + y * (Resolution + 1);
-                        var ib = y * (Resolution + 1);
-                        var ic = (Resolution) + (y + 1) * (Resolution + 1);
-                        var id = (y + 1) * (Resolution + 1);
-                        Debug.Assert(ia < voxelChunks[i].Voxels.Length);
-                        Debug.Assert(ib < voxelChunks[i].XNeighbour.Voxels.Length);
-                        Debug.Assert(ic < voxelChunks[i].Voxels.Length);
-                        Debug.Assert(id < voxelChunks[i].XNeighbour.Voxels.Length);
                         Voxel2D[] voxels = new Voxel2D[]
                         {
-                            voxelChunks[i].Voxels[ia],
-                            new Voxel2D(
-                                voxelChunks[i+1].Voxels[ib].Position + new Vector2(ChunkSize,0),
-                                voxelChunks[i+1].Voxels[ib].Value
-                                ),
-                            //voxelChunks[i+1].Voxels[ib],
-
-                            voxelChunks[i].Voxels[ic],
-                            new Voxel2D(
-                                voxelChunks[i+1].Voxels[id].Position + new Vector2(ChunkSize,0),
-                                voxelChunks[i+1].Voxels[id].Value
-                                )
-                            //voxelChunks[i+1].Voxels[id]
+                            voxelChunks[i].Voxels[(Resolution) + y * (Resolution + 1)],
+                            voxelChunks[i].XNeighbour.Voxels[y * (Resolution + 1)].ToNewVoxelFromOffset(offset_xNeighbour),
+                            voxelChunks[i].Voxels[(Resolution) + (y + 1) * (Resolution + 1)],
+                            voxelChunks[i].XNeighbour.Voxels[(y + 1) * (Resolution + 1)].ToNewVoxelFromOffset(offset_xNeighbour)
                         };
                         TriangulateCell(voxels, ref meshData, ref vertex_i);
-                        Debug.Log("Triangulating Gap Cell of Chunk: " + i + "  Row: " + y);
-                        for (int v = 0; v < voxels.Length; v++)
-                        {
-                            Debug.Log("Voxel " + v + " Position: " + voxels[v].Position);
-                        }
-                    }
-                    
+                    }                    
                 }
-                // Triangulate top row (if possible)
 
-                // Triangulate top-right gap (if possible)
+                // Triangulate top row (if possible)
+                if (voxelChunks[i].YNeighbour != null)
+                {
+                    int y = Resolution;
+                    for (int x = 0; x < Resolution; x++)
+                    {
+                        Voxel2D[] voxels = new Voxel2D[]
+                        {
+                            voxelChunks[i].Voxels[x + y * (Resolution + 1)],
+                            voxelChunks[i].Voxels[x + y * (Resolution + 1) + 1],
+                            voxelChunks[i].YNeighbour.Voxels[x].ToNewVoxelFromOffset(offset_yNeighbour),
+                            voxelChunks[i].YNeighbour.Voxels[x+1].ToNewVoxelFromOffset(offset_yNeighbour)
+                        };
+                        TriangulateCell(voxels, ref meshData, ref vertex_i);
+                    }
+                }
+
+                // Triangulate top-right gap (if possible)          
+                if (voxelChunks[i].XNeighbour != null && voxelChunks[i].YNeighbour != null)
+                {
+                    int y = Resolution;
+
+                    Voxel2D[] voxels = new Voxel2D[]
+                    {
+                        voxelChunks[i].Voxels[Resolution + y * (Resolution + 1)],
+                        voxelChunks[i].XNeighbour.Voxels[y * (Resolution + 1)].ToNewVoxelFromOffset(offset_xNeighbour),
+                        voxelChunks[i].YNeighbour.Voxels[Resolution].ToNewVoxelFromOffset(offset_yNeighbour),
+                        voxelChunks[i].XNeighbour.YNeighbour.Voxels[0].ToNewVoxelFromOffset(offset_xyNeighbour)
+                    };
+                    TriangulateCell(voxels, ref meshData, ref vertex_i);
+                }
 
                 meshDataChunks[i] = meshData;
             }
@@ -376,6 +349,7 @@ namespace SCARLET.VoxelDensity
             byte cell_VertexCount = 0;
             byte cell_Mask = 0;
             byte workingBit = 0b_0001;
+
             Vector3[] edgePositions = new Vector3[]
             {
                 PointBetweenVoxels(voxels, 0, 1),
@@ -401,7 +375,7 @@ namespace SCARLET.VoxelDensity
             workingBit = 0b_0001;
             for (int v = 0; v < edgePositions.Length; v++)
             {
-                if (ByteContains(edgeMask, contains: workingBit))
+                if (edgeMask.Contains(workingBit))
                 {
                     AddVertexToMeshData(edgePositions[v], ref meshData, ref cell_VertexCount);
                 }
@@ -423,11 +397,6 @@ namespace SCARLET.VoxelDensity
             meshData.Verts.Add(vert);
             vertex_i++;
         }
-        private bool ByteContains(byte @byte, byte contains)
-        {
-            bool byteContains = (@byte & contains) == contains;
-            return byteContains;
-        }
         private Vector3 PointBetweenVoxels(Voxel2D[] voxelArray, int a, int b)
         {
             if (a >= voxelArray.Length || b >= voxelArray.Length)
@@ -435,7 +404,6 @@ namespace SCARLET.VoxelDensity
             return PointBetweenVoxels(voxelArray[a], voxelArray[b]);
         }
         private Vector3 PointBetweenVoxels(Voxel2D a, Voxel2D b) => Vector3.Lerp(a.Position, b.Position, halfpoint);
-        
         #endregion
     }
 }

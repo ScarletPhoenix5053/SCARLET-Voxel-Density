@@ -17,6 +17,8 @@ namespace SCARLET.VoxelDensity
             Value = value;
             Position = pos;
         }
+
+        internal Voxel2D ToNewVoxelFromOffset(Vector2 offset) => new Voxel2D(Position + offset, Value);
     }
     internal class VoxelChunk2D
     {
@@ -35,11 +37,11 @@ namespace SCARLET.VoxelDensity
 
     #region Voxel Brush Data
 
-    internal class VoxelBrush2D
+    public class VoxelBrush2D
     {
         internal VoxelDirectionValuePair2D[] ValueDirectionPairs;
 
-        internal VoxelBrush2D()
+        public VoxelBrush2D()
         {
             ValueDirectionPairs = new VoxelDirectionValuePair2D[1]
             {

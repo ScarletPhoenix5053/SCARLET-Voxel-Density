@@ -193,7 +193,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_BoundingSphereOverride: {x: 0, y: -1.16831474e+24, z: 5.32e-43, w: -1.3624846e+24}
   m_UseBoundingSphereOverride: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
@@ -306,6 +306,7 @@ GameObject:
   - component: {fileID: 1113114146}
   - component: {fileID: 1113114145}
   - component: {fileID: 1113114144}
+  - component: {fileID: 1113114147}
   m_Layer: 0
   m_Name: Voxel Density Plane
   m_TagString: Untagged
@@ -339,7 +340,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a9d714c364956d458fc0871fb7e8e97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Resolution: 3
+  Resolution: 1
   ChunkCountX: 3
   ChunkCountY: 3
   ChunkSize: 10
@@ -388,3 +389,16 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1113114142}
   m_Mesh: {fileID: 0}
+--- !u!114 &1113114147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1113114142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00bd943dedb8f084b8421b9da8dc2ad1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  VoxelDensityPlane: {fileID: 1113114144}
