@@ -31,7 +31,7 @@ namespace SCARLET.VoxelDensity
                 new VoxelDirectionValuePair2D(0,-1,0)*/
             };
         }
-        
+
         void Update()
         {
             // Allow editing of voxel values
