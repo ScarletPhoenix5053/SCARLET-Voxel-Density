@@ -4,57 +4,6 @@ using UnityEngine;
 
 namespace SCARLET.VoxelDensity
 {
-    #region Voxel Data
-
-    internal class Voxel2D
-    {
-        internal Vector2 Position;
-        internal float Value = 0;
-
-        internal Voxel2D(float posX, float posY)
-        {
-            Position = new Vector2(posX, posY);
-        }
-    }
-    internal class VoxelChunk2D
-    {
-        internal Vector2 Position = Vector2.zero;
-        internal Voxel2D[] Voxels;
-        internal BoxCollider Collider;
-    }
-
-    #endregion
-
-    #region Voxel Brush Data
-
-    internal class VoxelBrush2D
-    {
-        internal VoxelDirectionValuePair2D[] ValueDirectionPairs;
-
-        internal VoxelBrush2D()
-        {
-            ValueDirectionPairs = new VoxelDirectionValuePair2D[1]
-            {
-            new VoxelDirectionValuePair2D(0,0,1)
-            };
-        }
-    }
-    internal struct VoxelDirectionValuePair2D
-    {
-        internal int XDir;
-        internal int YDir;
-        internal float Value;
-
-        internal VoxelDirectionValuePair2D(int xDir, int yDir, float value)
-        {
-            XDir = xDir;
-            YDir = yDir;
-            Value = value;
-        }
-    }
-
-    #endregion
-
     [RequireComponent(
         typeof(MeshFilter),
         typeof(MeshRenderer)
@@ -87,15 +36,16 @@ namespace SCARLET.VoxelDensity
         #region Immutable / Private Variables
         
         private const float colliderDepth = 0.1f;
-        private const float debug_stepTime = 0.1f;
+        private const float halfpoint = 0.5f;
+        private const float gizmoSize = 0.3f;
 
         private VoxelChunk2D[] voxelChunks;
 
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
 
-        private VoxelBrush2D activeBrush = new VoxelBrush2D();
-        private IEnumerator activeEditRoutine = null;
+        private VoxelBrush2D primaryBrush = new VoxelBrush2D();
+        private VoxelBrush2D secondaryBrush = new VoxelBrush2D();
         #endregion
 
         #region Unity Messages
@@ -107,10 +57,24 @@ namespace SCARLET.VoxelDensity
             meshRenderer = GetComponent<MeshRenderer>();
 
             // Define Default brush
-            activeBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
+            primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
             {
-                new VoxelDirectionValuePair2D(0,0,1)
+                new VoxelDirectionValuePair2D(0,0,1)/*,
+                new VoxelDirectionValuePair2D(-1,0,1),
+                new VoxelDirectionValuePair2D(0,1,1),
+                new VoxelDirectionValuePair2D(1,0,1),
+                new VoxelDirectionValuePair2D(0,-1,1)*/
             };
+            secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
+            {
+                new VoxelDirectionValuePair2D(0,0,0)/*,
+                new VoxelDirectionValuePair2D(-1,0,0),
+                new VoxelDirectionValuePair2D(0,1,0),
+                new VoxelDirectionValuePair2D(1,0,0),
+                new VoxelDirectionValuePair2D(0,-1,0)*/
+            };
+
+
 
             // Generate chunks
             InitChunks();
@@ -119,11 +83,25 @@ namespace SCARLET.VoxelDensity
 
         private void Update()
         {
+            bool reTriangulate = false;
             if (Input.GetKey(KeyCode.Mouse0))
             {
-                EditChunkDataWithBrush(activeBrush, voxelChunks);
-                TriangulateData(voxelChunks, out MeshData meshData);
-                meshFilter.mesh = meshData.ToMesh();
+                EditChunkDataWithBrush(primaryBrush, voxelChunks);
+                reTriangulate = true;
+            }
+            else if (Input.GetKey(KeyCode.Mouse1))
+            {
+                EditChunkDataWithBrush(secondaryBrush, voxelChunks);
+                reTriangulate = true;
+            }
+
+            if (reTriangulate)
+            {
+                TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+                for (int i = 0; i < voxelChunks.Length; i++)
+                {
+                    voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+                }
             }
         }
 
@@ -131,9 +109,15 @@ namespace SCARLET.VoxelDensity
         {
             if (voxelChunks != null)
             {
+                //Debug.Log("Chunkcount: " + voxelChunks.Length);
                 foreach (VoxelChunk2D chunk in voxelChunks)
                 {
-                    DrawGizmosForVoxels(chunk.Voxels);
+                    //Debug.Log(chunk.Position);
+                    foreach (Voxel2D voxel in chunk.Voxels)
+                    {
+                        Gizmos.color = new Color(voxel.Value, voxel.Value, voxel.Value);
+                        Gizmos.DrawSphere(voxel.Position + chunk.Position, gizmoSize);
+                    }
                 }
             }
         }
@@ -152,26 +136,59 @@ namespace SCARLET.VoxelDensity
                 for (int x = 0; x < ChunkCountX; x++, i++)
                 {
                     // Define location and voxels
-                    var chunkPos = new Vector2(chunkPosX, chunkPosY);
+                    var chunkPos = new Vector2(chunkPosX, chunkPosY) + new Vector2(ChunkSize / 2, ChunkSize / 2);
                     var chunk = new VoxelChunk2D();
-                    chunk.Voxels = GenerateVoxelChunk(ChunkSize, Resolution, chunkPos);
+                    chunk.Voxels = GenerateVoxelChunk(ChunkSize, Resolution, Vector2.one * -(ChunkSize/2));
+                    chunk.Position = chunkPos;
 
                     // Create gameobject for collider
-                    var colliderGo = new GameObject("Chunk " + x + "/" + y + " collider");
-                    colliderGo.transform.parent = transform;
-                    colliderGo.transform.position = chunkPos + new Vector2(ChunkSize / 2, ChunkSize / 2);
+                    var chunkGameObj = new GameObject("Chunk " + x + "/" + y);
+                    chunkGameObj.transform.parent = transform;
+                    chunkGameObj.transform.position = chunkPos;
 
                     // Create collider
-                    var boxCol = colliderGo.AddComponent<BoxCollider>();
+                    var boxCol = chunkGameObj.AddComponent<BoxCollider>();
                     boxCol.size = new Vector3(ChunkSize, ChunkSize, colliderDepth);
                     chunk.Collider = boxCol;
+
+                    // Create mesh components
+                    chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
+                    chunk.MeshRenderer = chunkGameObj.AddComponent<MeshRenderer>();
 
                     // Incriemnt
                     voxelChunks[i] = chunk;
                     chunkPosX += ChunkSize;
+
+                    // Assign self as neighbour to relevant chunks
+                    if (x != 0) voxelChunks[i - 1].XNeighbour = voxelChunks[i];
+                    if (y != 0) voxelChunks[i - ChunkCountX].YNeighbour = voxelChunks[i];
                 }
                 chunkPosY += ChunkSize;
             }
+        }
+        private Voxel2D[] GenerateVoxelChunk(float size, int resolution, Vector2 offset)
+        {
+            int cells = resolution * resolution;
+            int voxelsPerRow = resolution + 1;
+            float spacing = size / voxelsPerRow;
+
+            Voxel2D[] voxelPlane = new Voxel2D[voxelsPerRow * voxelsPerRow];
+
+            // Iterate and generate plane
+            float posY = spacing / 2;
+            for (int y = 0; y < voxelsPerRow; y++)
+            {
+                float posX = spacing / 2;
+                for (int x = 0; x < voxelsPerRow; x++)
+                {
+                    var newVoxel = new Voxel2D(posX + offset.x, posY + offset.y);
+                    voxelPlane[x + (y * voxelsPerRow)] = newVoxel;
+                    posX += spacing;
+                }
+                posY += spacing;
+            }
+
+            return voxelPlane;
         }
 
         private void EditChunkDataWithBrush(VoxelBrush2D brush, VoxelChunk2D[] voxelChunks)
@@ -190,8 +207,8 @@ namespace SCARLET.VoxelDensity
                     for (int vi = 0; vi < voxelChunks[ci].Voxels.Length; vi++)
                     {
                         var inspectedVoxel = voxelChunks[ci].Voxels[vi];
-                        if (Vector3.Distance(inspectedVoxel.Position, hit.point) <
-                            Vector3.Distance(closestVoxel.Position, hit.point))
+                        if (Vector3.Distance(inspectedVoxel.Position + voxelChunks[ci].Position, hit.point) <
+                            Vector3.Distance(closestVoxel.Position + voxelChunks[closestChunkIndex].Position, hit.point))
                         {
                             closestVoxel = inspectedVoxel;
                             closestVoxelIndex = vi;
@@ -201,13 +218,6 @@ namespace SCARLET.VoxelDensity
                 }
                 // Establish where the voxel is in its chunk
                 int voxel_y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int voxel_x);
-
-                Debug.Log(
-                    "Closest voxel to mouse is:" +
-                    " C:  " + closestChunkIndex +
-                    " I: " + closestVoxelIndex +
-                    " x/y: " + voxel_x + "," + voxel_y
-                    );
 
                 // Modify voxels based on active brush
                 for (int i = 0; i < brush.ValueDirectionPairs.Length; i++)
@@ -286,71 +296,129 @@ namespace SCARLET.VoxelDensity
                 }
             }
         }
-
-
-        private void TriangulateData(VoxelChunk2D[] voxelChunks, out MeshData meshData)
+                
+        private void TriangulateData(VoxelChunk2D[] voxelChunks, out MeshData[] meshDataChunks)
         {
-            meshData = new MeshData();
-            meshData.Verts = new List<Vector3>();
-            meshData.Tris = new List<int>();
+            meshDataChunks = new MeshData[voxelChunks.Length];
 
-            int vertex_i = 0;
-
-            // For each cell
-            for (int y = 0; y < Resolution; y++)
+            // For each chunk
+            for (int i = 0; i < voxelChunks.Length; i++)
             {
-                for (int x = 0; x < Resolution; x++)
+                var meshData = new MeshData();
+                meshData.Verts = new List<Vector3>();
+                meshData.Tris = new List<int>();
+                
+                int vertex_i = 0;
+
+                // Triangulate all cells except top row
+                for (int y = 0; y < Resolution; y++)
                 {
-                    int cellVertexCount = 0;
-
-                    // Identify cell with a bitmask
-                    int voxelAIndex = x + y * (Resolution + 1);
-                    int voxelBIndex = x + y * (Resolution + 1) + 1;
-                    int voxelCIndex = x + (y + 1) * (Resolution + 1);
-                    int voxelDIndex = x + (y + 1) * (Resolution + 1) + 1;
-
-                    Voxel2D a = voxelChunks[0].Voxels[voxelAIndex];
-                    Voxel2D b = voxelChunks[0].Voxels[voxelBIndex];
-                    Voxel2D c = voxelChunks[0].Voxels[voxelCIndex];
-                    Voxel2D d = voxelChunks[0].Voxels[voxelDIndex];
-
-                    byte cellMask = 0;
-
-                    /*
-                    Debug.Log("Triangulating cell " + x + "," + y);
-                    Debug.Log("Voxel Indicies: " + voxelAIndex + " " + voxelBIndex + " " + voxelCIndex + " " + voxelDIndex);
-                    Debug.Log("Voxel Values: " + a.Value + " " + b.Value + " " + c.Value + " " + d.Value);
-                    */
-
-                    // Must find a way to keep track of which voxels have been added
-                    if (a.Value > 0) { cellMask |= 0b_0001; AddVertexToMeshData(a.Position, ref meshData, ref cellVertexCount); Debug.Log("v0"); }
-                    if (b.Value > 0) { cellMask |= 0b_0010; AddVertexToMeshData(b.Position, ref meshData, ref cellVertexCount); Debug.Log("v1"); }
-                    if (c.Value > 0) { cellMask |= 0b_0100; AddVertexToMeshData(c.Position, ref meshData, ref cellVertexCount); Debug.Log("v2"); }
-                    if (d.Value > 0) { cellMask |= 0b_1000; AddVertexToMeshData(d.Position, ref meshData, ref cellVertexCount); Debug.Log("v3"); }
-
-                    //Debug.Log("Bitmask " + System.Convert.ToString(cellMask, 2).ToString().PadLeft(4,'0'));
-
-                    // Create edge veriticies
-                    var edgeMask = TriangulationData.IntersectionPoints[cellMask];
-                    //Debug.Log("Edge Intersections " + System.Convert.ToString(edgeMask, 2).PadLeft(4, '0'));
-                    if (ByteContains(edgeMask, contains: 0b_0001)) AddVertexToMeshData(Vector3.Lerp(a.Position, b.Position, 0.5f), ref meshData, ref cellVertexCount);
-                    if (ByteContains(edgeMask, contains: 0b_0010)) AddVertexToMeshData(Vector3.Lerp(a.Position, c.Position, 0.5f), ref meshData, ref cellVertexCount);
-                    if (ByteContains(edgeMask, contains: 0b_0100)) AddVertexToMeshData(Vector3.Lerp(b.Position, d.Position, 0.5f), ref meshData, ref cellVertexCount);
-                    if (ByteContains(edgeMask, contains: 0b_1000)) AddVertexToMeshData(Vector3.Lerp(c.Position, d.Position, 0.5f), ref meshData, ref cellVertexCount);
-
-                    // Stitch vertecies to create tris
-                    var triOrder = TriangulationData.TriangleFormations[cellMask];
-                    foreach (byte cellVertexIndex in triOrder)
+                    // Triangulate row
+                    for (int x = 0; x < Resolution; x++)
                     {
-                        meshData.Tris.Add(vertex_i + cellVertexIndex);
+                        Voxel2D[] voxels = new Voxel2D[]
+                        {
+                            voxelChunks[i].Voxels[x + y * (Resolution + 1)],
+                            voxelChunks[i].Voxels[x + y * (Resolution + 1) + 1],
+                            voxelChunks[i].Voxels[x + (y + 1) * (Resolution + 1)],
+                            voxelChunks[i].Voxels[x + (y + 1) * (Resolution + 1) + 1]
+                        };
+                        TriangulateCell(voxels, ref meshData, ref vertex_i);
+                    }
+
+                    // Triangulate gap cell (if possible)
+                    
+                    if (voxelChunks[i].XNeighbour != null)
+                    {
+                        var ia = (Resolution) + y * (Resolution + 1);
+                        var ib = y * (Resolution + 1);
+                        var ic = (Resolution) + (y + 1) * (Resolution + 1);
+                        var id = (y + 1) * (Resolution + 1);
+                        Debug.Assert(ia < voxelChunks[i].Voxels.Length);
+                        Debug.Assert(ib < voxelChunks[i].XNeighbour.Voxels.Length);
+                        Debug.Assert(ic < voxelChunks[i].Voxels.Length);
+                        Debug.Assert(id < voxelChunks[i].XNeighbour.Voxels.Length);
+                        Voxel2D[] voxels = new Voxel2D[]
+                        {
+                            voxelChunks[i].Voxels[ia],
+                            new Voxel2D(
+                                voxelChunks[i+1].Voxels[ib].Position + new Vector2(ChunkSize,0),
+                                voxelChunks[i+1].Voxels[ib].Value
+                                ),
+                            //voxelChunks[i+1].Voxels[ib],
+
+                            voxelChunks[i].Voxels[ic],
+                            new Voxel2D(
+                                voxelChunks[i+1].Voxels[id].Position + new Vector2(ChunkSize,0),
+                                voxelChunks[i+1].Voxels[id].Value
+                                )
+                            //voxelChunks[i+1].Voxels[id]
+                        };
+                        TriangulateCell(voxels, ref meshData, ref vertex_i);
+                        Debug.Log("Triangulating Gap Cell of Chunk: " + i + "  Row: " + y);
+                        for (int v = 0; v < voxels.Length; v++)
+                        {
+                            Debug.Log("Voxel " + v + " Position: " + voxels[v].Position);
+                        }
                     }
                     
-                    // Inriment indicies
-                    vertex_i += cellVertexCount;
                 }
+                // Triangulate top row (if possible)
+
+                // Triangulate top-right gap (if possible)
+
+                meshDataChunks[i] = meshData;
             }
         }
-        private void AddVertexToMeshData(Vector3 vert, ref MeshData meshData, ref int vertex_i)
+        private void TriangulateCell(Voxel2D[] voxels, ref MeshData meshData, ref int vertex_i)
+        {
+            // Define cell-based variables
+            byte cell_VertexCount = 0;
+            byte cell_Mask = 0;
+            byte workingBit = 0b_0001;
+            Vector3[] edgePositions = new Vector3[]
+            {
+                PointBetweenVoxels(voxels, 0, 1),
+                PointBetweenVoxels(voxels, 0, 2),
+                PointBetweenVoxels(voxels, 1, 3),
+                PointBetweenVoxels(voxels, 2, 3)
+            };
+
+            // Check corners and define cell type
+            workingBit = 0b_0001;
+            for (int v = 0; v < voxels.Length; v++)
+            {
+                if (voxels[v].Value > 0)
+                {
+                    cell_Mask |= workingBit;
+                    AddVertexToMeshData(voxels[v].Position, ref meshData, ref cell_VertexCount);
+                }
+                workingBit <<= 1;
+            }
+
+            // Use cell type to plce edge verticies
+            byte edgeMask = TriangulationData.IntersectionPoints[cell_Mask];
+            workingBit = 0b_0001;
+            for (int v = 0; v < edgePositions.Length; v++)
+            {
+                if (ByteContains(edgeMask, contains: workingBit))
+                {
+                    AddVertexToMeshData(edgePositions[v], ref meshData, ref cell_VertexCount);
+                }
+                workingBit <<= 1;
+            }
+
+            // Stitch vertecies to create tris
+            var triOrder = TriangulationData.TriangleFormations[cell_Mask];
+            foreach (byte cellVertexIndex in triOrder)
+            {
+                meshData.Tris.Add(vertex_i + cellVertexIndex);
+            }
+
+            // Inriment indicies
+            vertex_i += cell_VertexCount;
+        }
+        private void AddVertexToMeshData(Vector3 vert, ref MeshData meshData, ref byte vertex_i)
         {
             meshData.Verts.Add(vert);
             vertex_i++;
@@ -358,57 +426,16 @@ namespace SCARLET.VoxelDensity
         private bool ByteContains(byte @byte, byte contains)
         {
             bool byteContains = (@byte & contains) == contains;
-            if (byteContains)
-            {
-                switch (contains)
-                {
-                    case 0b_0001: Debug.Log("v4"); break;
-                    case 0b_0010: Debug.Log("v5"); break;
-                    case 0b_0100: Debug.Log("v6"); break;
-                    case 0b_1000: Debug.Log("v7"); break;
-                    default:
-                        break;
-                }
-            }
             return byteContains;
         }
-
-        private Voxel2D[] GenerateVoxelChunk(float size, int resolution, Vector2 offset)
+        private Vector3 PointBetweenVoxels(Voxel2D[] voxelArray, int a, int b)
         {
-            int cells = resolution * resolution;
-            int voxelsPerRow = resolution + 1;
-            float spacing = size / voxelsPerRow;
-
-            Voxel2D[] voxelPlane = new Voxel2D[voxelsPerRow * voxelsPerRow];
-
-            // Iterate and generate plane
-            float posY = spacing / 2;
-            for (int y = 0; y < voxelsPerRow; y++)
-            {
-                float posX = spacing / 2;
-                for (int x = 0; x < voxelsPerRow; x++)
-                {
-                    var newVoxel = new Voxel2D(posX + offset.x, posY + offset.y);
-                    voxelPlane[x + (y * voxelsPerRow)] = newVoxel;
-                    posX += spacing;
-                }
-                posY += spacing;
-            }
-
-            return voxelPlane;
+            if (a >= voxelArray.Length || b >= voxelArray.Length)
+                throw new VoxelDensityException("Indicies a or b are out of range of voxel array " + voxelArray.ToString());
+            return PointBetweenVoxels(voxelArray[a], voxelArray[b]);
         }
-
-        private const float gizmoSize = 0.3f;
-        private void DrawGizmosForVoxels(Voxel2D[] voxels)
-        {
-            foreach (Voxel2D voxel in voxels)
-            {
-                Gizmos.color = new Color(voxel.Value, voxel.Value, voxel.Value);
-                Gizmos.DrawSphere(voxel.Position, gizmoSize);
-            }
-        }
-
+        private Vector3 PointBetweenVoxels(Voxel2D a, Voxel2D b) => Vector3.Lerp(a.Position, b.Position, halfpoint);
+        
         #endregion
-
     }
 }
