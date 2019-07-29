@@ -4,9 +4,12 @@ using UnityEngine;
 
 namespace SCARLET.VoxelDensity
 {
-    public class VoxelDensityVolumeEditorCrane : MonoBehaviour
+    public class VoxelDensityVolume_EditorCrane : MonoBehaviour
     {
         #region Modifiable Variables
+
+        [Header("Volume")]
+        public VoxelDensityVolume VoxelDensityVolume;
 
         [Header("Cursor")]
         public Transform Cursor;
@@ -23,8 +26,8 @@ namespace SCARLET.VoxelDensity
 
         #region Encapsulated Variables
 
-        private VoxelBrush2D primaryBrush = new VoxelBrush2D();
-        private VoxelBrush2D secondaryBrush = new VoxelBrush2D();
+        private VoxelBrush primaryBrush = new VoxelBrush();
+        private VoxelBrush secondaryBrush = new VoxelBrush();
 
         private float craneHeight = 0f;
         private Vector3 cranePos = Vector3.zero;
@@ -36,17 +39,17 @@ namespace SCARLET.VoxelDensity
         void Start()
         {
             // Define Default brush
-            primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
+            primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair[]
             {
-                new VoxelDirectionValuePair2D(0,0,1)/*,
+                new VoxelDirectionValuePair(0,0,0,1)/*,
                 new VoxelDirectionValuePair2D(-1,0,1),
                 new VoxelDirectionValuePair2D(0,1,1),
                 new VoxelDirectionValuePair2D(1,0,1),
                 new VoxelDirectionValuePair2D(0,-1,1)*/
             };
-            secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
+            secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair[]
             {
-                new VoxelDirectionValuePair2D(0,0,0)/*,
+                new VoxelDirectionValuePair(0,0,0,0)/*,
                 new VoxelDirectionValuePair2D(-1,0,0),
                 new VoxelDirectionValuePair2D(0,1,0),
                 new VoxelDirectionValuePair2D(1,0,0),
@@ -56,11 +59,7 @@ namespace SCARLET.VoxelDensity
 
         void Update()
         {
-            // Track mouse state
-            sbyte mouseDown = 0;
-            if (Input.GetKey(KeyCode.Mouse0)) mouseDown--;
-            if (Input.GetKey(KeyCode.Mouse1)) mouseDown++;
-
+            // If mouse is over a collider
             var hit = new RaycastHit();
             var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             if (Physics.Raycast(ray, out hit))
@@ -82,6 +81,18 @@ namespace SCARLET.VoxelDensity
                 // Display cursor at "crane" position
                 Cursor.gameObject.SetActive(true);
                 Cursor.position = cranePos;
+
+                // Allow editing of voxel state
+                sbyte mouseDown = 0;
+                if (Input.GetKey(KeyCode.Mouse0)) mouseDown--;
+                if (Input.GetKey(KeyCode.Mouse1)) mouseDown++;
+                if (mouseDown != 0)
+                {
+                    VoxelDensityVolume.ApplyVoxelBrush(
+                        cranePos,
+                        mouseDown < 0 ? primaryBrush : secondaryBrush
+                        );
+                }
             }
             else
             {

@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace SCARLET.VoxelDensity
 {
-    public class VoxelDensityPlaneEditorMouse : MonoBehaviour
+    public class VoxelDensityPlane_EditorMouse : MonoBehaviour
     {
         public VoxelDensityPlane VoxelDensityPlane;
 
@@ -16,11 +16,11 @@ namespace SCARLET.VoxelDensity
             // Define Default brush
             primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
             {
-                new VoxelDirectionValuePair2D(0,0,1)/*,
+                new VoxelDirectionValuePair2D(0,0,1),
                 new VoxelDirectionValuePair2D(-1,0,1),
                 new VoxelDirectionValuePair2D(0,1,1),
                 new VoxelDirectionValuePair2D(1,0,1),
-                new VoxelDirectionValuePair2D(0,-1,1)*/
+                new VoxelDirectionValuePair2D(0,-1,1)
             };
             secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair2D[]
             {

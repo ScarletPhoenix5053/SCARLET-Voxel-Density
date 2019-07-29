@@ -11,24 +11,10 @@ namespace SCARLET.VoxelDensity
     public class VoxelDensityPlane : MonoBehaviour
     {
         #region Modifiable Variables
-
-        /// <summary>
-        /// Number of voxel cells per chunk
-        /// </summary>
-        [Range(1, 8)] public int Resolution = 1;
-
-        /// <summary>
-        /// Number of chunks along the X axis
-        /// </summary>
+        
+        [Range(1, 8)] public int Resolution = 1;        
         public int ChunkCountX = 2;
-        /// <summary>
-        /// Number of chunks along the Y axis
-        /// </summary>
         public int ChunkCountY = 2;
-
-        /// <summary>
-        /// Size of the chunk in world space. Chunks are square.
-        /// </summary>
         public float ChunkSize = 10f;
 
         #endregion
@@ -37,7 +23,7 @@ namespace SCARLET.VoxelDensity
         
         private const float colliderDepth = 0.1f;
         private const float halfpoint = 0.5f;
-        private const float gizmoSize = 0.3f;
+        private const float gizmoSize = 0.05f;
 
         private VoxelChunk2D[] voxelChunks;
 
@@ -52,23 +38,17 @@ namespace SCARLET.VoxelDensity
             // Find attatched components
             meshFilter = GetComponent<MeshFilter>();
             meshRenderer = GetComponent<MeshRenderer>();
-
-            // Generate chunks
-            InitChunks();
-        }
-
-        private void Update()
-        {
+            
+            // Init
+            voxelChunks = GenerateChunks(ChunkCountX, ChunkCountY, ChunkSize);
         }
 
         private void OnDrawGizmos()
         {
             if (voxelChunks != null)
             {
-                //Debug.Log("Chunkcount: " + voxelChunks.Length);
                 foreach (VoxelChunk2D chunk in voxelChunks)
                 {
-                    //Debug.Log(chunk.Position);
                     foreach (Voxel2D voxel in chunk.Voxels)
                     {
                         Gizmos.color = new Color(voxel.Value, voxel.Value, voxel.Value);
@@ -80,51 +60,70 @@ namespace SCARLET.VoxelDensity
 
         #endregion
 
+        #region Operation Methods
+
+        public void ApplyVoxelBrush(Vector3 point, VoxelBrush2D brush)
+        {
+            EditChunkDataAtPoint(point, brush, voxelChunks);
+
+            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+            }
+        }
+
+        #endregion
+
         #region Working Methods
 
-        private void InitChunks()
+        private VoxelChunk2D[] GenerateChunks(int chunkCountX, int chunkCountY, float chunkSize)
         {
-            Material defaultMaterial = Resources.Load<Material>("VoxelDensity_Default");
+            VoxelChunk2D[] chunks = new VoxelChunk2D[chunkCountX * chunkCountY];
 
-            voxelChunks = new VoxelChunk2D[ChunkCountX * ChunkCountY];
+            // Locals
+            Vector2 chunkSizeVectorHalved = Vector2.one * (chunkSize / 2);
+            int i = 0;
 
-            float chunkPosY = -(ChunkSize * ChunkCountY) / 2;
-            for (int y = 0, i = 0; y < ChunkCountY; y++)
+            float chunkPosY = FindFirstChunkPos(chunkSize, chunkCountY);
+            for (int y = 0; y < chunkCountY; y++)
             {
-                float chunkPosX = -(ChunkSize * ChunkCountX) / 2;
-                for (int x = 0; x < ChunkCountX; x++, i++)
+                float chunkPosX = FindFirstChunkPos(chunkSize, chunkCountX);
+                for (int x = 0; x < chunkCountX; x++, i++)
                 {
                     // Define location and voxels
-                    var chunkPos = new Vector2(chunkPosX, chunkPosY) + new Vector2(ChunkSize / 2, ChunkSize / 2);
-                    var chunk = new VoxelChunk2D();
-                    chunk.Voxels = GenerateVoxelChunk(ChunkSize, Resolution, Vector2.one * -(ChunkSize/2));
+                    Vector2 chunkPos = new Vector2(chunkPosX, chunkPosY) + chunkSizeVectorHalved;
+                    VoxelChunk2D chunk = new VoxelChunk2D();
+                    chunk.Voxels = GenerateVoxelChunk(chunkSize, Resolution, -chunkSizeVectorHalved);
                     chunk.Position = chunkPos;
 
                     // Create gameobject for collider
-                    var chunkGameObj = new GameObject("Chunk " + x + "/" + y);
+                    var chunkGameObj = new GameObject(Constants.ChunkName_Default + " " + x + "/" + y);
                     chunkGameObj.transform.parent = transform;
                     chunkGameObj.transform.position = chunkPos;
 
                     // Create collider
                     var boxCol = chunkGameObj.AddComponent<BoxCollider>();
-                    boxCol.size = new Vector3(ChunkSize, ChunkSize, colliderDepth);
+                    boxCol.size = new Vector3(chunkSize, chunkSize, colliderDepth);
                     chunk.Collider = boxCol;
 
                     // Create mesh components
                     chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
                     chunk.MeshRenderer = chunkGameObj.AddComponent<MeshRenderer>();
-                    chunk.MeshRenderer.sharedMaterial = defaultMaterial;
+                    chunk.MeshRenderer.sharedMaterial = CommonReferences.DefaultMaterial;
 
                     // Incriemnt
-                    voxelChunks[i] = chunk;
-                    chunkPosX += ChunkSize;
+                    chunks[i] = chunk;
+                    chunkPosX += chunkSize;
 
                     // Assign self as neighbour to relevant chunks
-                    if (x != 0) voxelChunks[i - 1].XNeighbour = voxelChunks[i];
-                    if (y != 0) voxelChunks[i - ChunkCountX].YNeighbour = voxelChunks[i];
+                    if (x != 0) chunks[i - 1].XNeighbour = chunks[i];
+                    if (y != 0) chunks[i - chunkCountX].YNeighbour = chunks[i];
                 }
-                chunkPosY += ChunkSize;
+                chunkPosY += chunkSize;
             }
+
+            return chunks;
         }
         private Voxel2D[] GenerateVoxelChunk(float size, int resolution, Vector2 offset)
         {
@@ -150,56 +149,44 @@ namespace SCARLET.VoxelDensity
 
             return voxelPlane;
         }
+        private float FindFirstChunkPos(float chunkSize, int chunkCount) => -(chunkSize * chunkCount) / 2;
 
-        public void ApplyVoxelBrush(Vector3 point, VoxelBrush2D brush)
-        {
-            EditChunkDataAtPoint(point, brush, voxelChunks);
-
-            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
-            for (int i = 0; i < voxelChunks.Length; i++)
-            {
-                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
-            }
-        }
         private void EditChunkDataAtPoint(Vector3 point, VoxelBrush2D brush, VoxelChunk2D[] voxelChunks)
         {
             // Find closest voxel to hit point
-            var closestChunkIndex = 0;
-            var closestVoxelIndex = 0;
-            var closestVoxel = voxelChunks[0].Voxels[0];
+            var chunk_closestI = 0;
+            var voxel_closestI = 0;
             for (int ci = 0; ci < voxelChunks.Length; ci++)
             {
                 for (int vi = 0; vi < voxelChunks[ci].Voxels.Length; vi++)
                 {
-                    var inspectedVoxel = voxelChunks[ci].Voxels[vi];
-                    if (Vector3.Distance(inspectedVoxel.Position + voxelChunks[ci].Position, point) <
-                        Vector3.Distance(closestVoxel.Position + voxelChunks[closestChunkIndex].Position, point))
+                    if (Vector3.Distance(voxelChunks[ci].Voxels[vi].Position + voxelChunks[ci].Position, point) <
+                        Vector3.Distance(voxelChunks[chunk_closestI].Voxels[voxel_closestI].Position + voxelChunks[chunk_closestI].Position, point))
                     {
-                        closestVoxel = inspectedVoxel;
-                        closestVoxelIndex = vi;
-                        closestChunkIndex = ci;
+                        voxel_closestI = vi;
+                        chunk_closestI = ci;
                     }
                 }
             }
             // Establish where the voxel is in its chunk
-            int voxel_y = System.Math.DivRem(closestVoxelIndex, Resolution + 1, out int voxel_x);
+            int voxel_Y = System.Math.DivRem(voxel_closestI, Resolution + 1, out int voxel_X);
 
             // Modify voxels based on active brush
             for (int i = 0; i < brush.ValueDirectionPairs.Length; i++)
             {
                 //Get this chunk's x and y indicies
-                int chunk_editI = closestChunkIndex;
-                int chunk_x = 0;
-                int chunk_y = 0;
+                int chunk_editI = chunk_closestI;
+                int chunk_X = 0;
+                int chunk_Y = 0;
                 for (int chunk_i = 0; chunk_i < (ChunkCountX) * ChunkCountY; chunk_i++)
                 {
                     if (chunk_i == chunk_editI) break;
-                    chunk_x++;
+                    chunk_X++;
 
-                    if (chunk_x == ChunkCountX)
+                    if (chunk_X == ChunkCountX)
                     {
-                        chunk_y++;
-                        chunk_x = 0;
+                        chunk_Y++;
+                        chunk_X = 0;
                     }
                 }
 
@@ -207,20 +194,20 @@ namespace SCARLET.VoxelDensity
                 bool abort = false;
 
                 TryEditVoxelOnAxis(
-                    voxel_y, chunk_y,
-                    brush.ValueDirectionPairs[i].YDir,
-                    dimensionOffset: ChunkCountX,
-                    ref chunk_editI,
-                    out int editYI,
-                    ref abort
-                    );
-                TryEditVoxelOnAxis(
-                    voxel_x, chunk_x,
+                    voxel_X, chunk_X,
                     brush.ValueDirectionPairs[i].XDir,
                     dimensionOffset: 1,
-                    ref chunk_editI,
                     out int editXI,
+                    ref chunk_editI,
                     ref abort);
+                TryEditVoxelOnAxis(
+                    voxel_Y, chunk_Y,
+                    brush.ValueDirectionPairs[i].YDir,
+                    dimensionOffset: ChunkCountX,
+                    out int editYI,
+                    ref chunk_editI,
+                    ref abort
+                    );
 
                 if (!abort)
                     voxelChunks[chunk_editI]
@@ -228,35 +215,39 @@ namespace SCARLET.VoxelDensity
                             .Value = brush.ValueDirectionPairs[i].Value;
             }
         }
-        private void TryEditVoxelOnAxis(int voxel_N, int chunk_N, int nDirOffset, int dimensionOffset, ref int chunk_editI, out int voxel_editN, ref bool abort)
+        private void TryEditVoxelOnAxis(int voxel_N, int chunk_N, int nDirOffset, int dimensionOffset, out int voxel_editNI, ref int chunk_editI,  ref bool abort)
         {
-            voxel_editN = voxel_N + nDirOffset;
-
-            var nIsOutOfBounds = voxel_editN < 0 || Resolution < voxel_editN;
-            if (nIsOutOfBounds)
+            voxel_editNI = voxel_N + nDirOffset;
+            
+            if (voxel_editNI < 0 || Resolution < voxel_editNI)
             {
                 // Get offset pos of chunk along n axis
-                var chunkoffsetN =
+                var chunk_offsetNI =
                     System.Math.DivRem(
-                        voxel_editN,
+                        voxel_editNI,
                         Resolution + 1,
                         out int posInNewChunk
                         );
-                chunkoffsetN += (int)Mathf.Sign(voxel_editN) * 1;
-                if (chunkoffsetN > 0) chunkoffsetN--;
+                chunk_offsetNI += (int)Mathf.Sign(voxel_editNI) * 1;
+                if (chunk_offsetNI > 0) chunk_offsetNI--;
 
                 // Try modify n in other chunk. Prevent edit if chunk does not exist
-                int editCN = chunk_N + chunkoffsetN;
-                if (editCN < 0 || ChunkCountY <= editCN) { abort = true; return; }
+                if (chunk_N + chunk_offsetNI < 0 ||
+                    ChunkCountY <= chunk_N + chunk_offsetNI
+                    )
+                {
+                    abort = true;
+                    return;
+                }
                 else
                 {
                     // Dimension offset is used for converting additional dimensions back into the singular dimension of the chunk array.
                     // 1st dim uses 1
                     // 2nd dim uses length of 1st
-                    chunk_editI += chunkoffsetN * dimensionOffset;
+                    chunk_editI += chunk_offsetNI * dimensionOffset;
 
-                    if (voxel_editN < 0) voxel_editN += Mathf.Abs(chunkoffsetN) * (Resolution + 1);
-                    else voxel_editN -= Mathf.Abs(chunkoffsetN) * (Resolution + 1);
+                    if (voxel_editNI < 0) voxel_editNI += Mathf.Abs(chunk_offsetNI) * (Resolution + 1);
+                    else voxel_editNI -= Mathf.Abs(chunk_offsetNI) * (Resolution + 1);
                 }
             }
         }

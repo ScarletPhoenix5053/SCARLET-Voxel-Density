@@ -10,9 +10,9 @@ namespace SCARLET.VoxelDensity
         internal Vector3 Position;
         internal float Value;
 
-        internal Voxel(float posX, float posY) : this(posX, posY, 0) { }
-        internal Voxel(float posX, float posY, float value) : this(new Vector2(posX, posY), value) { }
-        internal Voxel(Vector2 pos, float value)
+        internal Voxel(float posX, float posY, float posZ) : this(posX, posY, posZ, 0) { }
+        internal Voxel(float posX, float posY, float posZ, float value) : this(new Vector3(posX, posY, posZ), value) { }
+        internal Voxel(Vector3 pos, float value)
         {
             Value = value;
             Position = pos;
@@ -24,14 +24,14 @@ namespace SCARLET.VoxelDensity
     {
 #pragma warning disable 0649
         internal Vector3 Position = Vector2.zero;
-        internal Voxel2D[] Voxels;
+        internal Voxel[] Voxels;
 
         internal BoxCollider Collider;
         internal MeshFilter MeshFilter;
         internal MeshRenderer MeshRenderer;
 
-        internal VoxelChunk2D XNeighbour;
-        internal VoxelChunk2D YNeighbour;
+        internal VoxelChunk XNeighbour;
+        internal VoxelChunk YNeighbour;
 #pragma warning restore 0649
     }
 
@@ -55,12 +55,14 @@ namespace SCARLET.VoxelDensity
     {
         internal int XDir;
         internal int YDir;
+        internal int ZDir;
         internal float Value;
 
         internal VoxelDirectionValuePair(int xDir, int yDir, int zDir, float value)
         {
             XDir = xDir;
             YDir = yDir;
+            ZDir = zDir;
             Value = value;
         }
     }
