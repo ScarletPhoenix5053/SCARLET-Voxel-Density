@@ -1,4 +1,4 @@
-﻿using System.Collections;
+﻿using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -17,12 +17,15 @@ namespace SCARLET.VoxelDensity
 
         public float ChunkSize = 10f;
 
+        [Header("Default Generation")]
+        public float VoxelValueDefault = 0;
+
         #endregion
 
         #region Encapsulated Data
 
         private const float halfpoint = 0.5f;
-        private const float gizmoSize = 0.2f;
+        private const float gizmoSize = 0.05f;
 
         private VoxelChunk[] voxelChunks;
 
@@ -65,14 +68,12 @@ namespace SCARLET.VoxelDensity
         public void ApplyVoxelBrush(Vector3 point, VoxelBrush brush)
         {
             EditChunkDataAtPoint(point, brush, voxelChunks);
-
-            /*
+            
             TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
             for (int i = 0; i < voxelChunks.Length; i++)
             {
                 voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
             }
-            */
         }
 
         #endregion
@@ -144,7 +145,7 @@ namespace SCARLET.VoxelDensity
                     float posX = spacing / 2;
                     for (int x = 0; x < voxelsPerRow; x++)
                     {
-                        var newVoxel = new Voxel(posX + offset.x, posY + offset.y, posZ + offset.z, 0);
+                        var newVoxel = new Voxel(posX + offset.x, posY + offset.y, posZ + offset.z, VoxelValueDefault);
                         voxelVolume[x + (y * voxelsPerRow) + (int)(z * Mathf.Pow(voxelsPerRow, 2))] = newVoxel;
                         posX += spacing;
                     }
@@ -177,16 +178,8 @@ namespace SCARLET.VoxelDensity
             }
 
             // Establish where the voxel is in its chunk
-            //int voxel_Y = System.Math.DivRem(voxel_closestI,VoxelResolution, out int voxel_X);
-            /*
-            int voxel_Z = voxel_closestI / (int)Mathf.Pow(VoxelResolution, 2);
-            int voxel_Y = (voxel_closestI - voxel_Z) / VoxelResolution;
-            int voxel_X = voxel_closestI - voxel_Z - voxel_Y;
-            */
             int voxel_Z = System.Math.DivRem(voxel_closestI, (int)Mathf.Pow(VoxelResolution, 2), out int zRem);
             int voxel_Y = System.Math.DivRem(zRem, VoxelResolution, out int voxel_X); 
-
-            Debug.Log("Editing Voxel at: " + voxel_X + "," + voxel_Y + "," + voxel_Z + " in Chunk: " + chunk_closestI);
             
             // Modify voxels based on active brush
             for (int i = 0; i < brush.ValueDirectionPairs.Length; i++)
@@ -284,6 +277,165 @@ namespace SCARLET.VoxelDensity
             }
         }
 
+
+        private void TriangulateData(VoxelChunk[] voxelChunks, out MeshData[] meshDataChunks)
+        {
+            meshDataChunks = new MeshData[voxelChunks.Length];
+
+            Vector2 offset_xNeighbour = new Vector3(ChunkSize, 0, 0);
+            Vector2 offset_yNeighbour = new Vector3(0, ChunkSize, 0);
+            Vector2 offset_zNeighbour = new Vector3(0, 0, ChunkSize);
+
+            Vector2 offset_xyNeighbour = offset_xNeighbour + offset_yNeighbour;
+            Vector2 offset_xzNeighbour = offset_xNeighbour + offset_yNeighbour;
+            Vector2 offset_yzNeighbour = offset_yNeighbour + offset_zNeighbour;
+
+            Vector3 offset_xyzNeighbour = offset_xNeighbour + offset_yNeighbour + offset_zNeighbour;
+
+            
+            // For each chunk
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                var meshData = new MeshData();
+                meshData.Verts = new List<Vector3>();
+                meshData.Tris = new List<int>();
+
+                int vertex_i = 0;
+
+                // Triangulate all core cells
+                for (int z = 0; z < CellResolution; z++)
+                {
+                    for (int y = 0; y < CellResolution; y++)
+                    {
+                        for (int x = 0; x < CellResolution; x++)
+                        {
+                        //    Debug.Log("Triangulating cell: " + CommonMethods.ConcatXYZ(x, y, z));
+
+                            int yLow = y * VoxelResolution;
+                            int yHigh = (y + 1) * VoxelResolution;
+
+                            int zNear = z * (int)Mathf.Pow(VoxelResolution, 2);
+                            int zFar = (z + 1) * (int)Mathf.Pow(VoxelResolution, 2);
+
+                            int i0 = x + yLow + zFar;
+                            int i3 = x + yLow + zNear;
+                            int i4 = x + yHigh + zFar;
+                            int i7 = x + yHigh + zNear;
+
+                            Voxel[] voxels = new Voxel[]
+                            {
+                                voxelChunks[i].Voxels[i0],
+                                voxelChunks[i].Voxels[i0+1],
+                                voxelChunks[i].Voxels[i3+1],
+                                voxelChunks[i].Voxels[i3],
+
+                                voxelChunks[i].Voxels[i4],
+                                voxelChunks[i].Voxels[i4+1],
+                                voxelChunks[i].Voxels[i7+1],
+                                voxelChunks[i].Voxels[i7]
+                            };
+                            TriangulateCell(voxels, ref meshData, ref vertex_i);
+                        }
+                    }
+                }
+
+                meshDataChunks[i] = meshData;
+            }
+        }
+        private void TriangulateCell(Voxel[] voxels, ref MeshData meshData, ref int vertex_i)
+        {
+            // Define cell-based variables
+            int cell_EdgeVertexCount = 0;
+            byte cell_Mask = 0;
+            byte workingBit = 0b_0000_0001;
+
+            byte[] cornerIndicies = new byte[8];
+            int[] edgeIndicies = Enumerable.Repeat(-1, 12).ToArray();
+            Vector3[] edgePositions = new Vector3[]
+            {
+                PointBetweenVoxels(voxels, 0, 1),
+                PointBetweenVoxels(voxels, 1, 2),
+                PointBetweenVoxels(voxels, 2, 3),
+                PointBetweenVoxels(voxels, 3, 0),
+
+                PointBetweenVoxels(voxels, 4, 5),
+                PointBetweenVoxels(voxels, 5, 6),
+                PointBetweenVoxels(voxels, 6, 7),
+                PointBetweenVoxels(voxels, 7, 4),
+
+                PointBetweenVoxels(voxels, 0, 4),
+                PointBetweenVoxels(voxels, 1, 5),
+                PointBetweenVoxels(voxels, 2, 6),
+                PointBetweenVoxels(voxels, 3, 7)
+            };
+
+            // Check corners and define cell type
+            workingBit = 0b_0000_0001;
+            for (byte v = 0; v < voxels.Length; v++)
+            {
+                if (voxels[v].Value <= 0)
+                {
+                    cell_Mask |= workingBit;
+                    //cornerIndicies[v] = cell_CornerVertexCount;
+                    //AddVertexToMeshData(voxels[v].Position, ref meshData, ref cell_CornerVertexCount);
+                }
+                workingBit <<= 1;
+            }
+
+            //Debug.Log("Cell Type: " + System.Convert.ToString(cell_Mask, 2).PadLeft(8, '0') + " (" + cell_Mask + ")");
+
+            // Use cell type to place edge verticies
+            short edgeMask = TriangulationData.IntersectionPoints[cell_Mask];
+           // Debug.Log("Edge Intersections: " + System.Convert.ToString(edgeMask, 2).PadLeft(12, '0') + " (" + edgeMask + ")");
+            workingBit = 0b_0000_0001;
+            for (byte v = 0; v < edgePositions.Length; v++)
+            {
+                if (edgeMask.Contains(workingBit))
+                {
+                   //    Debug.Log("Edge " + v + " is intersected. Vertex count: " + cell_EdgeVertexCount);
+                    edgeIndicies[v] = cell_EdgeVertexCount;
+                    AddVertexToMeshData(edgePositions[v], ref meshData, ref cell_EdgeVertexCount);
+                }
+                workingBit <<= 1;
+            }
+
+            // Stitch vertecies to create tris
+            var triOrder = TriangulationData.TriangleFormations[cell_Mask];
+            foreach (byte triVertIndex in triOrder)
+            {
+                // In marching cubes we don't have to worry about corner verts! only edge cuts need to be defined
+                meshData.Tris.Add(vertex_i + edgeIndicies[triVertIndex]);
+
+                /*
+                for (int i = 0; i < edgeIndicies.Length; i++)
+                {
+                    /*
+                    Debug.Log("looping " + i);
+                    if (edgeIndicies[i] < 0) continue;
+                    else
+                    {
+                        Debug.Log("Add tri at vert " + i);
+                        meshData.Tris.Add(vertex_i + edgeIndicies[i]);
+                    }
+                }*/
+
+            }
+
+            // Inriment indicies
+            vertex_i = vertex_i + cell_EdgeVertexCount;
+        }
+        private void AddVertexToMeshData(Vector3 vert, ref MeshData meshData, ref int vertex_i)
+        {
+            meshData.Verts.Add(vert);
+            vertex_i++;
+        }
+        private Vector3 PointBetweenVoxels(Voxel[] voxelArray, int a, int b)
+        {
+            if (a >= voxelArray.Length || b >= voxelArray.Length)
+                throw new VoxelDensityException("Indicies a or b are out of range of voxel array " + voxelArray.ToString());
+            return PointBetweenVoxels(voxelArray[a], voxelArray[b]);
+        }
+        private Vector3 PointBetweenVoxels(Voxel a, Voxel b) => Vector3.Lerp(a.Position, b.Position, halfpoint);
         #endregion
     }
 }

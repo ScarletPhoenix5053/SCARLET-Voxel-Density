@@ -13,4 +13,8 @@ namespace SCARLET.VoxelDensity
     {
         internal static Material DefaultMaterial => Resources.Load<Material>(Constants.MaterialResourcePath_Default);
     }
+    internal static class CommonMethods
+    {
+        internal static string ConcatXYZ(int x, int y, int z) => " " + x + "," + y + "," + z + " ";
+    }
 }

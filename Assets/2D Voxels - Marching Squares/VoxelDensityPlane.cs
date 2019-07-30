@@ -362,7 +362,7 @@ namespace SCARLET.VoxelDensity
             }
 
             // Use cell type to plce edge verticies
-            byte edgeMask = TriangulationData.IntersectionPoints[cell_Mask];
+            byte edgeMask = TriangulationData2D.IntersectionPoints[cell_Mask];
             workingBit = 0b_0001;
             for (int v = 0; v < edgePositions.Length; v++)
             {
@@ -374,7 +374,7 @@ namespace SCARLET.VoxelDensity
             }
 
             // Stitch vertecies to create tris
-            var triOrder = TriangulationData.TriangleFormations[cell_Mask];
+            var triOrder = TriangulationData2D.TriangleFormations[cell_Mask];
             foreach (byte cellVertexIndex in triOrder)
             {
                 meshData.Tris.Add(vertex_i + cellVertexIndex);

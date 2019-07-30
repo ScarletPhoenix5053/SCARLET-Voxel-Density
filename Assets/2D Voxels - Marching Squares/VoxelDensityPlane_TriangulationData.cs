@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-public static class TriangulationData
+public static class TriangulationData2D
 {
     public static byte[] IntersectionPoints = new byte[16]
     {
