@@ -20,12 +20,14 @@ namespace SCARLET.VoxelDensity
         [Header("Default Generation")]
         public float VoxelValueDefault = 0;
 
+        [Header("Gizmo Control")]
+        public float GizmoSize = 0.01f;
+        public bool DrawGizmos = false;
         #endregion
 
         #region Encapsulated Data
 
         private const float halfpoint = 0.5f;
-        private const float gizmoSize = 0.05f;
 
         private VoxelChunk[] voxelChunks;
 
@@ -48,14 +50,15 @@ namespace SCARLET.VoxelDensity
 
         private void OnDrawGizmos()
         {
-            if (voxelChunks != null)
+
+            if (DrawGizmos && voxelChunks != null)
             {
                 foreach (VoxelChunk chunk in voxelChunks)
                 {
                     foreach (Voxel voxel in chunk.Voxels)
                     {
                         Gizmos.color = new Color(voxel.Value, voxel.Value, voxel.Value);
-                        Gizmos.DrawSphere(voxel.Position + chunk.Position, gizmoSize);
+                        Gizmos.DrawSphere(voxel.Position + chunk.Position, GizmoSize);
                     }
                 }
             }
@@ -115,10 +118,8 @@ namespace SCARLET.VoxelDensity
                         chunkPosX += chunkSize;
 
                         // Assign self as neighbour to relevant chunks
-                        /*
                         if (x != 0) voxelChunks[i - 1].XNeighbour = voxelChunks[i];
                         if (y != 0) voxelChunks[i - chunkCountX].YNeighbour = voxelChunks[i];
-                        */
                     }
                     chunkPosY += chunkSize;
                 }
@@ -302,27 +303,28 @@ namespace SCARLET.VoxelDensity
 
                 int vertex_i = 0;
 
-                // Triangulate all core cells
+                int xMax = CellResolution;
+                int yMax = VoxelResolution * CellResolution;
+
+                // Triangulate all the cells
                 for (int z = 0; z < CellResolution; z++)
                 {
+                    int zNear = z * (int)Mathf.Pow(VoxelResolution, 2);
+                    int zFar = (z + 1) * (int)Mathf.Pow(VoxelResolution, 2);
+
                     for (int y = 0; y < CellResolution; y++)
                     {
+                        int yLow = y * VoxelResolution;
+                        int yHigh = (y + 1) * VoxelResolution;
+
                         for (int x = 0; x < CellResolution; x++)
                         {
-                        //    Debug.Log("Triangulating cell: " + CommonMethods.ConcatXYZ(x, y, z));
-
-                            int yLow = y * VoxelResolution;
-                            int yHigh = (y + 1) * VoxelResolution;
-
-                            int zNear = z * (int)Mathf.Pow(VoxelResolution, 2);
-                            int zFar = (z + 1) * (int)Mathf.Pow(VoxelResolution, 2);
-
+                            // Triangulate all core cells
                             int i0 = x + yLow + zFar;
                             int i3 = x + yLow + zNear;
                             int i4 = x + yHigh + zFar;
                             int i7 = x + yHigh + zNear;
-
-                            Voxel[] voxels = new Voxel[]
+                            Voxel[] coreVoxels = new Voxel[]
                             {
                                 voxelChunks[i].Voxels[i0],
                                 voxelChunks[i].Voxels[i0+1],
@@ -334,7 +336,69 @@ namespace SCARLET.VoxelDensity
                                 voxelChunks[i].Voxels[i7+1],
                                 voxelChunks[i].Voxels[i7]
                             };
-                            TriangulateCell(voxels, ref meshData, ref vertex_i);
+                            TriangulateCell(coreVoxels, ref meshData, ref vertex_i);
+                        }
+
+                        // Triangulate x neighbour gap for this row
+                        if (voxelChunks[i].XNeighbour != null)
+                        {
+                            Voxel[] xGapVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].Voxels[CellResolution + yLow + zFar],
+                                voxelChunks[i].XNeighbour.Voxels[yLow + zFar].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].XNeighbour.Voxels[yLow + zNear].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].Voxels[CellResolution + yLow + zNear],
+
+                                voxelChunks[i].Voxels[CellResolution + yHigh + zFar],
+                                voxelChunks[i].XNeighbour.Voxels[yHigh + zFar].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].XNeighbour.Voxels[yHigh + zNear].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].Voxels[CellResolution + yHigh + zNear]
+                            };
+                            TriangulateCell(xGapVoxels, ref meshData, ref vertex_i);
+                        }
+
+                    }
+                    
+                    // Triangulate a row of the y neighbour plane
+                    if (voxelChunks[i].YNeighbour != null)
+                    {
+                        for (int x = 0; x < CellResolution; x++)
+                        {
+                            int i0 = x + yMax + zFar;
+                            int i3 = x + yMax + zNear;
+                            int i4 = x + 0 + zFar;
+                            int i7 = x + 0 + zNear;
+                            Voxel[] coreVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].Voxels[i0],
+                                voxelChunks[i].Voxels[i0+1],
+                                voxelChunks[i].Voxels[i3+1],
+                                voxelChunks[i].Voxels[i3],
+
+                                voxelChunks[i].YNeighbour.Voxels[i4].ToNewVoxelFromOffset(offset_yNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[i4+1].ToNewVoxelFromOffset(offset_yNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[i7+1].ToNewVoxelFromOffset(offset_yNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[i7].ToNewVoxelFromOffset(offset_yNeighbour)
+                            };
+                            TriangulateCell(coreVoxels, ref meshData, ref vertex_i);
+                        }
+
+                        // Triangulate xy neighbour gap for this row
+                        if (voxelChunks[i].XNeighbour != null)
+                        {
+                            Voxel[] xGapVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].Voxels[xMax + yMax + zFar],
+                                voxelChunks[i].XNeighbour.Voxels[0 + yMax + zFar].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].XNeighbour.Voxels[0 + yMax + zNear].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].Voxels[xMax + yMax + zNear],
+
+                                voxelChunks[i].YNeighbour.Voxels[xMax + zFar].ToNewVoxelFromOffset(offset_yNeighbour),
+                                voxelChunks[i].YNeighbour.XNeighbour.Voxels[zFar].ToNewVoxelFromOffset(offset_xyNeighbour),
+                                voxelChunks[i].YNeighbour.XNeighbour.Voxels[zNear].ToNewVoxelFromOffset(offset_xyNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[xMax + zNear].ToNewVoxelFromOffset(offset_yNeighbour)
+                            };
+                            TriangulateCell(xGapVoxels, ref meshData, ref vertex_i);
                         }
                     }
                 }
@@ -405,20 +469,6 @@ namespace SCARLET.VoxelDensity
             {
                 // In marching cubes we don't have to worry about corner verts! only edge cuts need to be defined
                 meshData.Tris.Add(vertex_i + edgeIndicies[triVertIndex]);
-
-                /*
-                for (int i = 0; i < edgeIndicies.Length; i++)
-                {
-                    /*
-                    Debug.Log("looping " + i);
-                    if (edgeIndicies[i] < 0) continue;
-                    else
-                    {
-                        Debug.Log("Add tri at vert " + i);
-                        meshData.Tris.Add(vertex_i + edgeIndicies[i]);
-                    }
-                }*/
-
             }
 
             // Inriment indicies

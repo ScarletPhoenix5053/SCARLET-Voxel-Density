@@ -1303,12 +1303,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ce0186fd44b11fa4bbdbc644ff60e7ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CellResolution: 5
+  CellResolution: 1
   ChunkCountX: 2
   ChunkCountY: 2
-  ChunkCountZ: 2
+  ChunkCountZ: 1
   ChunkSize: 5
   VoxelValueDefault: 0
+  GizmoSize: 0.25
+  DrawGizmos: 1
 --- !u!1 &1784320398
 GameObject:
   m_ObjectHideFlags: 0

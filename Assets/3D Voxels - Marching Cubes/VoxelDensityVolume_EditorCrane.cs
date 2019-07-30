@@ -48,11 +48,7 @@ namespace SCARLET.VoxelDensity
             // Define Default brush
             primaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair[]
             {
-                new VoxelDirectionValuePair(0,0,0,1)/*,
-                new VoxelDirectionValuePair2D(-1,0,1),
-                new VoxelDirectionValuePair2D(0,1,1),
-                new VoxelDirectionValuePair2D(1,0,1),
-                new VoxelDirectionValuePair2D(0,-1,1)*/
+                new VoxelDirectionValuePair(0,0,0,1),
             };
             secondaryBrush.ValueDirectionPairs = new VoxelDirectionValuePair[]
             {
