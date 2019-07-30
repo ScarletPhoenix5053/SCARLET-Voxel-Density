@@ -120,6 +120,7 @@ namespace SCARLET.VoxelDensity
                         // Assign self as neighbour to relevant chunks
                         if (x != 0) voxelChunks[i - 1].XNeighbour = voxelChunks[i];
                         if (y != 0) voxelChunks[i - chunkCountX].YNeighbour = voxelChunks[i];
+                        if (z != 0) voxelChunks[i - (chunkCountX * chunkCountY)].ZNeighbour = voxelChunks[i];
                     }
                     chunkPosY += chunkSize;
                 }
@@ -283,13 +284,13 @@ namespace SCARLET.VoxelDensity
         {
             meshDataChunks = new MeshData[voxelChunks.Length];
 
-            Vector2 offset_xNeighbour = new Vector3(ChunkSize, 0, 0);
-            Vector2 offset_yNeighbour = new Vector3(0, ChunkSize, 0);
-            Vector2 offset_zNeighbour = new Vector3(0, 0, ChunkSize);
+            Vector3 offset_xNeighbour = new Vector3(ChunkSize, 0, 0);
+            Vector3 offset_yNeighbour = new Vector3(0, ChunkSize, 0);
+            Vector3 offset_zNeighbour = new Vector3(0, 0, ChunkSize);
 
-            Vector2 offset_xyNeighbour = offset_xNeighbour + offset_yNeighbour;
-            Vector2 offset_xzNeighbour = offset_xNeighbour + offset_yNeighbour;
-            Vector2 offset_yzNeighbour = offset_yNeighbour + offset_zNeighbour;
+            Vector3 offset_xyNeighbour = offset_xNeighbour + offset_yNeighbour;
+            Vector3 offset_xzNeighbour = offset_xNeighbour + offset_zNeighbour;
+            Vector3 offset_yzNeighbour = offset_yNeighbour + offset_zNeighbour;
 
             Vector3 offset_xyzNeighbour = offset_xNeighbour + offset_yNeighbour + offset_zNeighbour;
 
@@ -305,21 +306,23 @@ namespace SCARLET.VoxelDensity
 
                 int xMax = CellResolution;
                 int yMax = VoxelResolution * CellResolution;
+                int zMax = VoxelResolution * VoxelResolution * CellResolution;
 
-                // Triangulate all the cells
+                // Triangulate planes
                 for (int z = 0; z < CellResolution; z++)
                 {
                     int zNear = z * (int)Mathf.Pow(VoxelResolution, 2);
                     int zFar = (z + 1) * (int)Mathf.Pow(VoxelResolution, 2);
 
+                    // Rows
                     for (int y = 0; y < CellResolution; y++)
                     {
                         int yLow = y * VoxelResolution;
                         int yHigh = (y + 1) * VoxelResolution;
 
+                        // Triangulate all core cells
                         for (int x = 0; x < CellResolution; x++)
                         {
-                            // Triangulate all core cells
                             int i0 = x + yLow + zFar;
                             int i3 = x + yLow + zNear;
                             int i4 = x + yHigh + zFar;
@@ -402,6 +405,109 @@ namespace SCARLET.VoxelDensity
                         }
                     }
                 }
+
+                // Triangulate Z neighbour plane
+                if (voxelChunks[i].ZNeighbour != null)
+                {
+                    // Rows
+                    for (int y = 0; y < CellResolution; y++)
+                    {
+                        int yLow = y * VoxelResolution;
+                        int yHigh = (y + 1) * VoxelResolution;
+
+                        // Cells
+                        for (int x = 0; x < CellResolution; x++)
+                        {
+                            int i0 = x + yLow;
+                            int i3 = x + yLow + zMax;
+                            int i4 = x + yHigh;
+                            int i7 = x + yHigh + zMax;
+                            Voxel[] coreVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].ZNeighbour.Voxels[i0].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].ZNeighbour.Voxels[i0+1].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].Voxels[i3+1],
+                                voxelChunks[i].Voxels[i3],
+
+                                voxelChunks[i].ZNeighbour.Voxels[i4].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].ZNeighbour.Voxels[i4+1].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].Voxels[i7+1],
+                                voxelChunks[i].Voxels[i7]
+                            };
+                            TriangulateCell(coreVoxels, ref meshData, ref vertex_i);
+
+                        }
+
+                        // XZ Neighbour cell
+                        if (voxelChunks[i].XNeighbour != null)
+                        {
+                            Voxel[] xGapVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].ZNeighbour.Voxels[xMax + yLow].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].XNeighbour.ZNeighbour.Voxels[yLow].ToNewVoxelFromOffset(offset_xzNeighbour),
+                                voxelChunks[i].XNeighbour.Voxels[yLow + zMax].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].Voxels[xMax + yLow + zMax],
+
+                                voxelChunks[i].ZNeighbour.Voxels[xMax + yHigh].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].XNeighbour.ZNeighbour.Voxels[yHigh].ToNewVoxelFromOffset(offset_xzNeighbour),
+                                voxelChunks[i].XNeighbour.Voxels[yHigh + zMax].ToNewVoxelFromOffset(offset_xNeighbour),
+                                voxelChunks[i].Voxels[xMax + yHigh + zMax]
+                            };
+                            TriangulateCell(xGapVoxels, ref meshData, ref vertex_i);
+                        }
+
+                    }
+
+                    // YZ Row
+                    if (voxelChunks[i].YNeighbour != null)
+                    {
+                        for (int x = 0; x < CellResolution; x++)
+                        {
+                            int i0 = x + yMax + 0;
+                            int i3 = x + yMax + zMax;
+                            int i4 = x + 0 + 0;
+                            int i7 = x + 0 + zMax;
+                            Voxel[] coreVoxels = new Voxel[]
+                            {
+                                voxelChunks[i].ZNeighbour.Voxels[i0].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].ZNeighbour.Voxels[i0+1].ToNewVoxelFromOffset(offset_zNeighbour),
+                                voxelChunks[i].Voxels[i3+1],
+                                voxelChunks[i].Voxels[i3],
+
+                                voxelChunks[i].YNeighbour.ZNeighbour.Voxels[i4].ToNewVoxelFromOffset(offset_yzNeighbour),
+                                voxelChunks[i].YNeighbour.ZNeighbour.Voxels[i4+1].ToNewVoxelFromOffset(offset_yzNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[i7+1].ToNewVoxelFromOffset(offset_yNeighbour),
+                                voxelChunks[i].YNeighbour.Voxels[i7].ToNewVoxelFromOffset(offset_yNeighbour)
+                            };
+                            TriangulateCell(coreVoxels, ref meshData, ref vertex_i);
+                        }
+
+                        
+                        // Triangulate XYZ corner cell
+                        if (voxelChunks[i].XNeighbour != null)
+                        {
+                            if (voxelChunks[i].XNeighbour != null)
+                            {
+                                Voxel[] xGapVoxels = new Voxel[]
+                                {
+                                    voxelChunks[i].ZNeighbour.Voxels[xMax + yMax].ToNewVoxelFromOffset(offset_zNeighbour),
+                                    voxelChunks[i].XNeighbour.ZNeighbour.Voxels[yMax].ToNewVoxelFromOffset(offset_xzNeighbour),
+                                    voxelChunks[i].XNeighbour.Voxels[yMax + zMax].ToNewVoxelFromOffset(offset_xNeighbour),
+                                    voxelChunks[i].Voxels[xMax+yMax+zMax],
+
+                                    voxelChunks[i].YNeighbour.ZNeighbour.Voxels[xMax].ToNewVoxelFromOffset(offset_yzNeighbour),
+                                    voxelChunks[i].XNeighbour.YNeighbour.ZNeighbour.Voxels[0].ToNewVoxelFromOffset(offset_xyzNeighbour),
+                                    voxelChunks[i].XNeighbour.YNeighbour.Voxels[zMax].ToNewVoxelFromOffset(offset_xyNeighbour),
+                                    voxelChunks[i].YNeighbour.Voxels[xMax + zMax].ToNewVoxelFromOffset(offset_yNeighbour)
+                                };
+                                TriangulateCell(xGapVoxels, ref meshData, ref vertex_i);
+                            }
+
+                        }
+                    }
+
+                }
+
 
                 meshDataChunks[i] = meshData;
             }

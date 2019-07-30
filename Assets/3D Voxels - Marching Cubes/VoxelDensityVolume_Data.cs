@@ -32,6 +32,7 @@ namespace SCARLET.VoxelDensity
 
         internal VoxelChunk XNeighbour;
         internal VoxelChunk YNeighbour;
+        internal VoxelChunk ZNeighbour;
 #pragma warning restore 0649
     }
 
