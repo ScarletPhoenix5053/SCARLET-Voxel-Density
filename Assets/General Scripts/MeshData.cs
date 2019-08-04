@@ -12,9 +12,7 @@ public struct MeshData
 
         newMesh.vertices = Verts.ToArray();
         newMesh.triangles = Tris.ToArray();
-
-        var normals = new Vector3[Verts.Count];
-        for (int i = 0; i < normals.Length; i++) normals[i] = Vector3.back;       
+        newMesh.RecalculateNormals();
 
         return newMesh;
     }

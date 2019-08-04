@@ -8,7 +8,7 @@ namespace SCARLET.VoxelDensity
     {
         #region Exposed Data
         
-        [Range(1, 8)] public int CellResolution = 1;
+        [Range(1, 16)] public int CellResolution = 1;
         public int VoxelResolution => CellResolution + 1;
         
         public int ChunkCountX = 2;
@@ -19,6 +19,7 @@ namespace SCARLET.VoxelDensity
 
         [Header("Default Generation")]
         public float VoxelValueDefault = 0;
+        public bool InterpolateEdgeIntersections = true;
 
         [Header("Gizmo Control")]
         public float GizmoSize = 0.01f;
@@ -66,22 +67,46 @@ namespace SCARLET.VoxelDensity
 
         #endregion
 
-        #region Operation Methods
+        #region Data Generation
 
-        public void ApplyVoxelBrush(Vector3 point, VoxelBrush brush)
+        public void RegenerateChunks()
         {
-            EditChunkDataAtPoint(point, brush, voxelChunks);
-            
+            // Reset data
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                for (int j = 0; j < voxelChunks[i].Voxels.Length; j++)
+                {
+                    voxelChunks[i].Voxels[j].Value = 0;
+                }
+            }
+
+            // Triangulate
             TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
             for (int i = 0; i < voxelChunks.Length; i++)
             {
                 voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
             }
         }
+        public void RegenerateChunks(SamplingMethod samplingFunction, float noiseOffset = 0)
+        {
+            // Edit Data
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                var currentChunk = voxelChunks[i];
+                for (int j = 0; j < voxelChunks[i].Voxels.Length; j++)
+                {
+                    var currentVoxel = currentChunk.Voxels[j];
+                    currentVoxel.Value = samplingFunction(currentChunk.Position + currentVoxel.Position + (Vector3.right * noiseOffset));
+                }
+            }
 
-        #endregion
-
-        #region Working Methods
+            // Triangulate
+            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+            }
+        }
 
         private VoxelChunk[] GenerateChunks(int chunkCountX, int chunkCountY, int chunkCountZ, float chunkSize)
         {
@@ -159,8 +184,21 @@ namespace SCARLET.VoxelDensity
             return voxelVolume;
         }
         private float FindFirstChunkPos(float chunkSize, int chunkCount) => -(chunkSize * chunkCount) / 2;
+        
+        #endregion
 
+        #region Data Editing
 
+        public void ApplyVoxelBrush(Vector3 point, VoxelBrush brush)
+        {
+            EditChunkDataAtPoint(point, brush, voxelChunks);
+
+            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+            }
+        }
         private void EditChunkDataAtPoint(Vector3 point, VoxelBrush brush, VoxelChunk[] voxelChunks)
         {
             // Find closest voxel to point
@@ -279,6 +317,9 @@ namespace SCARLET.VoxelDensity
             }
         }
 
+        #endregion
+
+        #region Triangulation
 
         private void TriangulateData(VoxelChunk[] voxelChunks, out MeshData[] meshDataChunks)
         {
@@ -546,23 +587,16 @@ namespace SCARLET.VoxelDensity
                 if (voxels[v].Value <= 0)
                 {
                     cell_Mask |= workingBit;
-                    //cornerIndicies[v] = cell_CornerVertexCount;
-                    //AddVertexToMeshData(voxels[v].Position, ref meshData, ref cell_CornerVertexCount);
                 }
                 workingBit <<= 1;
             }
-
-            //Debug.Log("Cell Type: " + System.Convert.ToString(cell_Mask, 2).PadLeft(8, '0') + " (" + cell_Mask + ")");
-
             // Use cell type to place edge verticies
             short edgeMask = TriangulationData.IntersectionPoints[cell_Mask];
-           // Debug.Log("Edge Intersections: " + System.Convert.ToString(edgeMask, 2).PadLeft(12, '0') + " (" + edgeMask + ")");
             workingBit = 0b_0000_0001;
             for (byte v = 0; v < edgePositions.Length; v++)
             {
                 if (edgeMask.Contains(workingBit))
                 {
-                   //    Debug.Log("Edge " + v + " is intersected. Vertex count: " + cell_EdgeVertexCount);
                     edgeIndicies[v] = cell_EdgeVertexCount;
                     AddVertexToMeshData(edgePositions[v], ref meshData, ref cell_EdgeVertexCount);
                 }
@@ -591,7 +625,20 @@ namespace SCARLET.VoxelDensity
                 throw new VoxelDensityException("Indicies a or b are out of range of voxel array " + voxelArray.ToString());
             return PointBetweenVoxels(voxelArray[a], voxelArray[b]);
         }
-        private Vector3 PointBetweenVoxels(Voxel a, Voxel b) => Vector3.Lerp(a.Position, b.Position, halfpoint);
+        private Vector3 PointBetweenVoxels(Voxel a, Voxel b)
+        {
+            if (InterpolateEdgeIntersections)
+            {
+                var t = Mathf.InverseLerp(a.Value, b.Value, 0);
+                return Vector3.Lerp(a.Position, b.Position, t);
+            }
+            else
+            {
+                return Vector3.Lerp(a.Position, b.Position, halfpoint);
+            }
+        }
+
         #endregion
+
     }
 }
