@@ -4,36 +4,59 @@ using UnityEngine;
 
 namespace SCARLET.VoxelDensity
 {
-    [RequireComponent(
-        typeof(MeshFilter),
-        typeof(MeshRenderer)
-        )]
     public class VoxelDensityPlane : MonoBehaviour
     {
-        #region Modifiable Variables
-        
-        [Range(1, 64)] public int CellResolution = 16;        
-        public int ChunkCountX = 2;
-        public int ChunkCountY = 2;
-        public float ChunkSize = 10f;
+        #region Exposed Variables
 
+        [Header("Resolution")]
+        [Range(1, 64)] public int CellResolution = 16;
+        public int VoxelResolution => CellResolution + 1;
+
+        [Header("Scale")]
+        public Vector2Int ChunkCount = Vector2Int.one;
+        public float ChunkSize = 10f;
+        public float ChunkHalfSize => ChunkSize / 2;
+
+        public float SizeX => ChunkSize * ChunkCount.x;
+        public float SizeY => ChunkSize * ChunkCount.y;
+        public Vector2 Size => new Vector2(SizeX, SizeY);
+
+        [Header("Radial Projection")]
+        public bool RadialProjection = false;
+        [Range(1, 360)] public float Carvature = 360f;
+        public float RadiusMin = 2.5f;
+
+        [Header("Voxels")]
+        public float DefaultValue = 0f;
+        public float GroundLevel = 0f;
+        public float VoxelValueMin = -1f;
+        public float VoxelValueMax = 1f;
         public bool InterpolateEdgeIntersections = true;
-        public bool DrawGizmos = true;
-        public bool Radial = false;
+
+        [Header("Gizmos")]
+        public bool GizmosEnabled = false;
+        public float GizmoSize = 0.05f;
+        public Gradient VoxelValueGradient = new Gradient();
+
+        private void OnValidate()
+        {
+            GroundLevel = Mathf.Clamp(GroundLevel, VoxelValueMin, VoxelValueMax);
+            DefaultValue = Mathf.Clamp(DefaultValue, VoxelValueMin, VoxelValueMax);
+
+            RadiusMin = Mathf.Max(0, RadiusMin);
+            ChunkSize = Mathf.Max(0.001f, ChunkSize);
+            ChunkCount.x = Mathf.Max(1, ChunkCount.x);
+            ChunkCount.y = Mathf.Max(1, ChunkCount.y);
+        }
 
         #endregion
 
         #region Class Variables
         
-        private const float colliderDepth = 0.1f;
         private const float halfpoint = 0.5f;
-        private const float gizmoSize = 0.05f;
 
         private VoxelChunk2D[] voxelChunks;
-
-        private MeshFilter meshFilter;
-        private MeshRenderer meshRenderer;
-
+        
         #endregion
         
 
@@ -41,25 +64,23 @@ namespace SCARLET.VoxelDensity
 
         private void Awake()
         {
-            // Find attatched components
-            meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
-
-            // Init
-            //voxelChunks = GenerateChunks(ChunkCountX, ChunkCountY, ChunkSize);
-            voxelChunks = GenerateChunksRadial(ChunkCountX, ChunkCountY, ChunkSize, 360f, 5f, 10f);
+            // Init chunks
+            voxelChunks = 
+                RadialProjection ?
+                voxelChunks = GenerateChunksRadial(ChunkSize, 360f, 5f, 10f) :
+                voxelChunks = GenerateChunks();
         }
 
         private void OnDrawGizmos()
         {
-            if (DrawGizmos && voxelChunks != null)
+            if (GizmosEnabled && voxelChunks != null)
             {
                 foreach (VoxelChunk2D chunk in voxelChunks)
                 {
                     foreach (Voxel2D voxel in chunk.Voxels)
                     {
-                        Gizmos.color = new Color(voxel.Value, voxel.Value, voxel.Value);
-                        Gizmos.DrawSphere(voxel.Position + chunk.Position, gizmoSize);
+                        Gizmos.color = VoxelValueGradient.Evaluate(Mathf.InverseLerp(VoxelValueMin, VoxelValueMax, voxel.Value));
+                        Gizmos.DrawSphere(voxel.Position + chunk.Position, GizmoSize);
                     }
                 }
             }
@@ -70,25 +91,17 @@ namespace SCARLET.VoxelDensity
 
         #region Data Generation
 
-        public void RegenerateChunks()
+        public void ResetChunks()
         {
-            // Reset data
-            for (int i = 0; i < voxelChunks.Length; i++)
-            {
-                for (int j = 0; j < voxelChunks[i].Voxels.Length; j++)
-                {
-                    voxelChunks[i].Voxels[j].Value = 0;
+            for (int i = 0; i < voxelChunks.Length; i++) {
+                for (int j = 0; j < voxelChunks[i].Voxels.Length; j++) {
+                    voxelChunks[i].Voxels[j].Value = DefaultValue;
                 }
             }
 
-            // Triangulate
-            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
-            for (int i = 0; i < voxelChunks.Length; i++)
-            {
-                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
-            }
+            TriangulateVoxels();
         }
-        public void RegenerateChunks(SamplingMethod samplingFunction, float noiseOfffset = 0f)
+        public void ResampleChunks(SamplingMethod samplingFunction, float noiseOfffset = 0f)
         {
             // Edit Data
             for (int i = 0; i < voxelChunks.Length; i++)
@@ -101,67 +114,63 @@ namespace SCARLET.VoxelDensity
                 }
             }
 
-            // Triangulate
-            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
-            for (int i = 0; i < voxelChunks.Length; i++)
-            {
-                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
-            }
+            TriangulateVoxels();
         }
 
-        private VoxelChunk2D[] GenerateChunks(int chunkCountX, int chunkCountY, float chunkSize)
-        {
-            VoxelChunk2D[] chunks = new VoxelChunk2D[chunkCountX * chunkCountY];
+        private VoxelChunk2D[] GenerateChunks()
+        {   
+            voxelChunks = new VoxelChunk2D[ChunkCount.x * ChunkCount.y];
 
             // Locals
-            Vector2 chunkSizeVectorHalved = Vector2.one * (chunkSize / 2);
             int i = 0;
+            Vector2 chunkOffset = -Vector2.one * ChunkHalfSize;
 
-            float chunkPosY = FindFirstChunkPos(chunkSize, chunkCountY);
-            for (int y = 0; y < chunkCountY; y++)
+            // Create collider
+            var boxCol = gameObject.AddComponent<BoxCollider2D>();
+            boxCol.size = new Vector2(ChunkCount.x * ChunkSize, ChunkCount.y * ChunkSize);
+
+            float chunkPosY = FindFirstChunkPos(ChunkSize, ChunkCount.y);
+            for (int y = 0; y < ChunkCount.y; y++)
             {
-                float chunkPosX = FindFirstChunkPos(chunkSize, chunkCountX);
-                for (int x = 0; x < chunkCountX; x++, i++)
+                float chunkPosX = FindFirstChunkPos(ChunkSize, ChunkCount.x);
+                for (int x = 0; x < ChunkCount.x; x++, i++)
                 {
-                    // Define location and voxels
-                    Vector2 chunkPos = new Vector2(chunkPosX, chunkPosY) + chunkSizeVectorHalved;
+                    // Definition & location
                     VoxelChunk2D chunk = new VoxelChunk2D();
-                    chunk.Voxels = GenerateVoxelChunk(chunkSize, CellResolution, -chunkSizeVectorHalved);
+                    Vector2 chunkPos = new Vector2(chunkPosX, chunkPosY) + Vector2.one * ChunkHalfSize;
                     chunk.Position = chunkPos;
 
-                    // Create gameobject for collider
+                    // Voxel Generation
+                    chunk.Voxels = GenerateVoxelChunk(chunkOffset);
+
+                    // Gameobject
                     var chunkGameObj = new GameObject(Constants.ChunkName_Default + " " + x + "/" + y);
                     chunkGameObj.transform.parent = transform;
                     chunkGameObj.transform.position = chunkPos;
-
-                    // Create collider
-                    var boxCol = chunkGameObj.AddComponent<BoxCollider>();
-                    boxCol.size = new Vector3(chunkSize, chunkSize, colliderDepth);
-                    chunk.Collider = boxCol;
-
+                    
                     // Create mesh components
                     chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
                     chunk.MeshRenderer = chunkGameObj.AddComponent<MeshRenderer>();
                     chunk.MeshRenderer.sharedMaterial = CommonReferences.DefaultMaterial;
 
                     // Incriemnt
-                    chunks[i] = chunk;
-                    chunkPosX += chunkSize;
+                    voxelChunks[i] = chunk;
+                    chunkPosX += ChunkSize;
 
                     // Assign self as neighbour to relevant chunks
-                    if (x != 0) chunks[i - 1].XNeighbour = chunks[i];
-                    if (y != 0) chunks[i - chunkCountX].YNeighbour = chunks[i];
+                    if (x != 0) voxelChunks[i - 1].XNeighbour = voxelChunks[i];
+                    if (y != 0) voxelChunks[i - ChunkCount.x].YNeighbour = voxelChunks[i];
                 }
-                chunkPosY += chunkSize;
+                chunkPosY += ChunkSize;
             }
 
-            return chunks;
+            return voxelChunks;
         }
-        private Voxel2D[] GenerateVoxelChunk(float size, int resolution, Vector2 offset)
+        private Voxel2D[] GenerateVoxelChunk(Vector2 offset)
         {
-            int cells = resolution * resolution;
-            int voxelsPerRow = resolution + 1;
-            float spacing = size / voxelsPerRow;
+            int cells = CellResolution * CellResolution;
+            int voxelsPerRow = CellResolution + 1;
+            float spacing = ChunkSize / voxelsPerRow;
 
             Voxel2D[] voxelPlane = new Voxel2D[voxelsPerRow * voxelsPerRow];
 
@@ -182,27 +191,27 @@ namespace SCARLET.VoxelDensity
             return voxelPlane;
         }
 
-        private VoxelChunk2D[] GenerateChunksRadial(int chunkCountX, int chunkCountY, float chunkSize, float carvature, float radiusMin, float radiusMax)
+        private VoxelChunk2D[] GenerateChunksRadial(float chunkSize, float carvature, float radiusMin, float radiusMax)
         {
-            VoxelChunk2D[] chunks = new VoxelChunk2D[chunkCountX * chunkCountY];
+            VoxelChunk2D[] chunks = new VoxelChunk2D[ChunkCount.x * ChunkCount.y];
 
             // Locals
             Vector2 chunkSizeVectorHalved = Vector2.one * (chunkSize / 2);
-            float chunkCarvature = carvature / ChunkCountX;
+            float chunkCarvature = carvature / ChunkCount.x;
             int i = 0;
             float initChunkAngle = -90f;
 
             // height
             var radiusRange = radiusMax - radiusMin;
-            var radiusStep = radiusRange / chunkCountY;            
+            var radiusStep = radiusRange / ChunkCount.y;            
 
-            float chunkPosY = FindFirstChunkPos(chunkSize, chunkCountY);
-            for (int y = 0; y < chunkCountY; y++)
+            float chunkPosY = FindFirstChunkPos(chunkSize, ChunkCount.y);
+            for (int y = 0; y < ChunkCount.y; y++)
             {
                 var thisLayerHeight = radiusMin + radiusStep * y;
 
-                float chunkPosX = FindFirstChunkPos(chunkSize, chunkCountX);
-                for (int x = 0; x < chunkCountX; x++, i++)
+                float chunkPosX = FindFirstChunkPos(chunkSize, ChunkCount.x);
+                for (int x = 0; x < ChunkCount.x; x++, i++)
                 {
                     // Define location and voxels
                  //   Vector2 chunkPos = new Vector2(chunkPosX, chunkPosY) + chunkSizeVectorHalved;
@@ -217,11 +226,7 @@ namespace SCARLET.VoxelDensity
                     chunkGameObj.transform.parent = transform;
                     chunkGameObj.transform.position = chunkPos;
 
-
                     // Create collider
-                    var boxCol = chunkGameObj.AddComponent<BoxCollider>();
-                    boxCol.size = new Vector3(chunkSize, chunkSize, colliderDepth);
-                    chunk.Collider = boxCol;
 
                     // Create mesh components
                     chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
@@ -234,7 +239,7 @@ namespace SCARLET.VoxelDensity
 
                     // Assign self as neighbour to relevant chunks
                     if (x != 0) chunks[i - 1].XNeighbour = chunks[i];
-                    if (y != 0) chunks[i - chunkCountX].YNeighbour = chunks[i];
+                    if (y != 0) chunks[i - ChunkCount.x].YNeighbour = chunks[i];
                 }
                 chunkPosY += chunkSize;
             }
@@ -261,9 +266,6 @@ namespace SCARLET.VoxelDensity
                     var voxelPos = normalizedAngle* yHeight;
                     var newVoxel = new Voxel2D(voxelPos.x + offset.x, voxelPos.y + offset.y);
                     voxelPlane[x + (y * voxelsPerRow)] = newVoxel;
-
-                    Debug.Log("Voxel " + x + "," + y + " xAngle: " + xAngle + " vector: " + normalizedAngle + " yHeight " + yHeight);
-
                     xAngle += angleOffset;
                 }
             }
@@ -314,12 +316,12 @@ namespace SCARLET.VoxelDensity
                 int chunk_editI = chunk_closestI;
                 int chunk_X = 0;
                 int chunk_Y = 0;
-                for (int chunk_i = 0; chunk_i < (ChunkCountX) * ChunkCountY; chunk_i++)
+                for (int chunk_i = 0; chunk_i < (ChunkCount.x) * ChunkCount.y; chunk_i++)
                 {
                     if (chunk_i == chunk_editI) break;
                     chunk_X++;
 
-                    if (chunk_X == ChunkCountX)
+                    if (chunk_X == ChunkCount.x)
                     {
                         chunk_Y++;
                         chunk_X = 0;
@@ -339,7 +341,7 @@ namespace SCARLET.VoxelDensity
                 TryEditVoxelOnAxis(
                     voxel_Y, chunk_Y,
                     brush.ValueDirectionPairs[i].YDir,
-                    dimensionOffset: ChunkCountX,
+                    dimensionOffset: ChunkCount.x,
                     out int editYI,
                     ref chunk_editI,
                     ref abort
@@ -369,7 +371,7 @@ namespace SCARLET.VoxelDensity
 
                 // Try modify n in other chunk. Prevent edit if chunk does not exist
                 if (chunk_N + chunk_offsetNI < 0 ||
-                    ChunkCountY <= chunk_N + chunk_offsetNI
+                    ChunkCount.y <= chunk_N + chunk_offsetNI
                     )
                 {
                     abort = true;
@@ -392,12 +394,21 @@ namespace SCARLET.VoxelDensity
 
         #region Triangulation
 
+        private void TriangulateVoxels()
+        {
+            TriangulateData(voxelChunks, out MeshData[] meshDataChunks);
+            for (int i = 0; i < voxelChunks.Length; i++)
+            {
+                voxelChunks[i].MeshFilter.mesh = meshDataChunks[i].ToMesh();
+            }
+        }
+
         private void TriangulateData(VoxelChunk2D[] voxelChunks, out MeshData[] meshDataChunks)
         {
             meshDataChunks = new MeshData[voxelChunks.Length];
 
-            Vector2 offset_yNeighbour = new Vector2(0, Radial ? 0 : ChunkSize);
-            Vector2 offset_xNeighbour = new Vector2(Radial ? 0 : ChunkSize, 0);
+            Vector2 offset_yNeighbour = new Vector2(0, RadialProjection ? 0 : ChunkSize);
+            Vector2 offset_xNeighbour = new Vector2(RadialProjection ? 0 : ChunkSize, 0);
             Vector2 offset_xyNeighbour = offset_xNeighbour + offset_yNeighbour;
 
             // For each chunk

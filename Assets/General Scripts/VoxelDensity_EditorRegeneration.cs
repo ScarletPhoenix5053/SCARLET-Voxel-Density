@@ -69,9 +69,8 @@ namespace SCARLET.VoxelDensity
 
         public void TriggerRegeneration()
         {
-            VoxelDensityPlane?.RegenerateChunks(SamplingMethods[(int)FillType]);
+            VoxelDensityPlane?.ResampleChunks(SamplingMethods[(int)FillType]);
             VoxelDensityVolume?.RegenerateChunks(SamplingMethods[(int)FillType]);
-            Debug.Log(Sample.NoiseOctaves);
         }
 
         private void FixedUpdate()
@@ -80,7 +79,7 @@ namespace SCARLET.VoxelDensity
             {
                 noiseOffset += Time.fixedDeltaTime * noiseOffsetSpeed;
 
-                VoxelDensityPlane?.RegenerateChunks(SamplingMethods[(int)FillType], noiseOffset);
+                VoxelDensityPlane?.ResampleChunks(SamplingMethods[(int)FillType], noiseOffset);
                 VoxelDensityVolume?.RegenerateChunks(SamplingMethods[(int)FillType], noiseOffset);
             }
         }
