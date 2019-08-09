@@ -123,19 +123,17 @@ namespace SCARLET.VoxelDensity
                     for (int x = 0; x < chunkCountX; x++, i++)
                     {
                         // Define location and voxels
+                        var chunkGameObj = new GameObject(Constants.ChunkName_Default + " (" + i + ") " + x + "," + y + "," + z);
                         var chunkPos = new Vector3(chunkPosX, chunkPosY, chunkPosZ) + Vector3.one * (chunkSize / 2);
-                        var chunk = new VoxelChunk();
+                        var chunk = chunkGameObj.AddComponent<VoxelChunk>();
                         chunk.Voxels = GenerateVoxelChunk(chunkSize, CellResolution, Vector3.one * -(chunkSize / 2));
                         chunk.Position = chunkPos;
 
                         // Create gameobject for collider
-                        var chunkGameObj = new GameObject(Constants.ChunkName_Default + " (" + i + ") " + x + "," + y + "," + z);
                         chunkGameObj.transform.parent = transform;
                         chunkGameObj.transform.position = chunkPos;
 
                         // Create mesh components
-                        chunk.MeshFilter = chunkGameObj.AddComponent<MeshFilter>();
-                        chunk.MeshRenderer = chunkGameObj.AddComponent<MeshRenderer>();
                         chunk.MeshRenderer.sharedMaterial = CommonReferences.DefaultMaterial;
 
                         // Incriemnt
@@ -172,7 +170,7 @@ namespace SCARLET.VoxelDensity
                     float posX = spacing / 2;
                     for (int x = 0; x < voxelsPerRow; x++)
                     {
-                        var newVoxel = new Voxel(posX + offset.x, posY + offset.y, posZ + offset.z, VoxelValueDefault);
+                        var newVoxel = new Voxel(new Vector3(posX + offset.x, posY + offset.y, posZ + offset.z), VoxelValueDefault);
                         voxelVolume[x + (y * voxelsPerRow) + (int)(z * Mathf.Pow(voxelsPerRow, 2))] = newVoxel;
                         posX += spacing;
                     }

@@ -46,6 +46,7 @@ namespace SCARLET.VoxelDensity
 
                 if (Physics.Raycast(ray, out hit))
                 {
+                    Debug.Log("hi");
                     VoxelDensityPlane.ApplyVoxelBrush(
                        hit.point,
                        mouseDown < 0 ? primaryBrush : secondaryBrush

@@ -535,19 +535,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2a9d714c364956d458fc0871fb7e8e97, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CellResolution: 16
-  ChunkCount: {x: 5, y: 5}
-  ChunkSize: 5
+  CellResolution: 4
+  ChunkCount: {x: 2, y: 2}
+  ChunkSize: 10
   RadialProjection: 0
   Carvature: 360
-  RadiusMin: 2
-  DefaultValue: 0
+  RadiusMin: 5
+  DefaultValue: -1
   GroundLevel: 0
   VoxelValueMin: -1
   VoxelValueMax: 1
   InterpolateEdgeIntersections: 1
-  GizmosEnabled: 0
-  GizmoSize: 0.05
+  GizmosEnabled: 1
+  GizmoSize: 0.1
   VoxelValueGradient:
     serializedVersion: 2
     key0: {r: 0.617486, g: 0, b: 1, a: 1}
