@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
     public delegate float SamplingMethod(Vector3 pos);
     public static class Sample

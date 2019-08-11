@@ -2,14 +2,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
-    public class VoxelDensityVolume_EditorCrane : MonoBehaviour
+    public class VoxelMeshVolume_EditorCrane : MonoBehaviour
     {
         #region Modifiable Variables
 
         [Header("Volume")]
-        public VoxelDensityVolume VoxelDensityVolume;
+        public VoxelMeshVolume VoxelMeshVolume;
 
         [Header("Cursor")]
         public Transform Cursor;
@@ -106,7 +106,7 @@ namespace SCARLET.VoxelDensity
                 }
                 if (mouseDown != 0)
                 {
-                    VoxelDensityVolume.ApplyVoxelBrush(
+                    VoxelMeshVolume.ApplyVoxelBrush(
                         cranePos,
                         mouseDown < 0 ? primaryBrush : secondaryBrush
                         );

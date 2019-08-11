@@ -2,11 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
-    public class VoxelDensityPlane_EditorMouse : MonoBehaviour
+    public class VoxelMesh_EditorMouse : MonoBehaviour
     {
-        public VoxelDensityPlane VoxelDensityPlane;
+        public VoxelMeshArea VoxelMeshArea;
 
         private VoxelBrush2D primaryBrush = new VoxelBrush2D();
         private VoxelBrush2D secondaryBrush = new VoxelBrush2D();
@@ -47,7 +47,7 @@ namespace SCARLET.VoxelDensity
                 if (Physics.Raycast(ray, out hit))
                 {
                     Debug.Log("hi");
-                    VoxelDensityPlane.ApplyVoxelBrush(
+                    VoxelMeshArea.ApplyVoxelBrush(
                        hit.point,
                        mouseDown < 0 ? primaryBrush : secondaryBrush
                        );

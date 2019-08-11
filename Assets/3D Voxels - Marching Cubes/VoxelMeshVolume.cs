@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
-    public class VoxelDensityVolume : MonoBehaviour
+    public class VoxelMeshVolume : MonoBehaviour
     {
         #region Exposed Data
         

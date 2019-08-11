@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
     public class VoxelDensityException : Exception
     {

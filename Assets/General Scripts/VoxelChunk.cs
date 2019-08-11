@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
     [RequireComponent(
         typeof(MeshRenderer),

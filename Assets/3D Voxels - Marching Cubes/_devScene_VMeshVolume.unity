@@ -152,15 +152,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8251ddbaa2949ef40820c75e203a2457, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  VoxelDensityPlane: {fileID: 0}
-  VoxelDensityVolume: {fileID: 1762196320}
+  VoxelMeshPlane: {fileID: 0}
+  VoxelMeshVolume: {fileID: 1762196320}
   NoiseFrequency: 0.12
   NoiseLacunarity: 2
   NoisePersistence: 0.5
   NoiseOctaves: 1
   FillType: 11
   noiseOffsetSpeed: 5
-  NoiseMotion: 1
+  NoiseMotion: 0
 --- !u!114 &86095890
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1000,7 +1000,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e89f308a1e6f3ae42aaa93742aafa396, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  VoxelDensityVolume: {fileID: 1762196320}
+  VoxelMeshVolume: {fileID: 0}
   Cursor: {fileID: 1899143860}
   HoldMouseToPaint: 1
   ColliderMask:

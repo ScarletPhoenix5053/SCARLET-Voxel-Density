@@ -2,13 +2,13 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace SCARLET.VoxelDensity
+namespace SCARLET.VoxelMesh
 {
-    public class VoxelDensity_EditorRegeneration : MonoBehaviour
+    public class VoxelMesh_EditorRegeneration : MonoBehaviour
     {
         [Header("Voxel Density Objects")]
-        public VoxelDensityPlane VoxelDensityPlane;
-        public VoxelDensityVolume VoxelDensityVolume;
+        public VoxelMeshArea VoxelMeshPlane;
+        public VoxelMeshVolume VoxelMeshVolume;
 
         [Header("Sampling Optionss")]
         public float NoiseFrequency = 10f;
@@ -69,8 +69,8 @@ namespace SCARLET.VoxelDensity
 
         public void TriggerRegeneration()
         {
-            VoxelDensityPlane?.ResampleChunks(SamplingMethods[(int)FillType]);
-            VoxelDensityVolume?.RegenerateChunks(SamplingMethods[(int)FillType]);
+            VoxelMeshPlane?.ResampleChunks(SamplingMethods[(int)FillType]);
+            VoxelMeshVolume?.RegenerateChunks(SamplingMethods[(int)FillType]);
         }
 
         private void FixedUpdate()
@@ -79,10 +79,9 @@ namespace SCARLET.VoxelDensity
             {
                 noiseOffset += Time.fixedDeltaTime * noiseOffsetSpeed;
 
-                VoxelDensityPlane?.ResampleChunks(SamplingMethods[(int)FillType], noiseOffset);
-                VoxelDensityVolume?.RegenerateChunks(SamplingMethods[(int)FillType], noiseOffset);
+                VoxelMeshPlane?.ResampleChunks(SamplingMethods[(int)FillType], noiseOffset);
+                VoxelMeshVolume?.RegenerateChunks(SamplingMethods[(int)FillType], noiseOffset);
             }
         }
     }
 }
-
